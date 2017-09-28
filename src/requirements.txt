@@ -1,0 +1,4 @@
+bson
+pymongo
+pandas
+scikit-image
