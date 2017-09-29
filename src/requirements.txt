@@ -2,3 +2,6 @@ bson
 pymongo
 pandas
 scikit-image
+google-apputils
+python-gflags
+glog
