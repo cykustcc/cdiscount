@@ -61,7 +61,7 @@ def imgs_size_stat(bson_file,
     stat_file='../data/img_size_stat.txt'):
   data = bson.decode_file_iter(open(bson_file, 'rb'))
   num_of_imgs_hist = {}
-  # num_of_imgs = 4369441 + 1128588 * 2 + 542792 * 3 + 1029075 * 4 
+  # num_of_imgs = 4369441 + 1128588 * 2 + 542792 * 3 + 1029075 * 4
   num_of_imgs = 12371293
   widths = num_of_imgs * [0]
   heights = num_of_imgs * [0]
@@ -70,10 +70,11 @@ def imgs_size_stat(bson_file,
   idx = 0;
   for c, d in enumerate(data):
     for e, pic in enumerate(d['imgs']):
-        picture = np.array(imread(io.BytesIO(pic['picture'])))
-        [w, h, c] = picture.shape
-        widths[idx] = w
-        heights[idx] = h
+      picture = np.array(imread(io.BytesIO(pic['picture'])))
+      [w, h, c] = picture.shape
+      widths[idx] = w
+      heights[idx] = h
+      idx += 1;
   width_mean = np.mean(widths);
   width_std = np.std(widths);
   height_mean = np.mean(heights);
@@ -86,9 +87,9 @@ def main(argv):
   if FLAGS.loop_and_see_example:
     loop_and_see('../data/train_example.bson', show_img=True)
   if FLAGS.get_img_cnt_hist:
-    get_img_cnt_per_prodcuct_histogram('../data/train_example.bson')
+    get_img_cnt_per_prodcuct_histogram('../data/train.bson')
   if FLAGS.get_img_size_stat:
-    imgs_size_stat('../data/train_example.bson')
+    imgs_size_stat('../data/train.bson')
 
 if __name__ == '__main__':
   app.run()
