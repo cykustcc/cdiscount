@@ -6,11 +6,14 @@ import gflags
 import numpy as np
 import pandas as pd
 import io
+import os
 import bson                       # this is installed with the pymongo package
 import matplotlib.pyplot as plt
 import csv
 from skimage.data import imread   # or, whatever image library you prefer
 import multiprocessing as mp      # will come in handy due to the size of the data
+from ipywidgets import IntProgress
+from tqdm import tqdm
 
 FLAGS = gflags.FLAGS
 
@@ -22,6 +25,10 @@ gflags.DEFINE_bool('get_img_cnt_hist', False,
 
 gflags.DEFINE_bool('get_img_size_stat', False,
                    'Calculate mean and std of image width and height.')
+
+gflags.DEFINE_bool('store_img_as_jpg', False,
+                   'Store imgs into a 2 level folder hierachy in the format of'
+                   'jpg.')
 
 def loop_and_see(bson_file, show_img=False):
   """
@@ -83,6 +90,42 @@ def imgs_size_stat(bson_file,
     writer = csv.writer(f)
     writer.writerow([width_mean, width_std, height_mean, height_std])
 
+
+def imgs_store_jpg(bson_file,
+    imgfilelist='../data/train_imgfilelist.txt',
+    imgroot='../data/train_imgs/'):
+  # Create categories folders.
+  categories = pd.read_csv('../data/category_names.csv', index_col='category_id')
+
+  if not os.path.exists(imgroot):
+    os.mkdir(imgroot)
+  for category in tqdm(categories.index):
+    category_folder_path = os.path.join(imgroot, str(category))
+    if not os.path.exists(category_folder_path):
+      os.mkdir(category_folder_path)
+  # store image as jpg files.
+  num_products = 7069896
+  bar = tqdm(total=num_products)
+
+  data = bson.decode_file_iter(open(bson_file, 'rb'))
+  imgfilelist_content = []
+  for c, d in enumerate(data):
+    product_id = d['_id']
+    category_id = d['category_id'] # This won't be in Test data
+    for e, pic in enumerate(d['imgs']):
+      relative_path = os.path.join(str(category_id),
+                                   '{}-{}.jpg'.format(product_id, e))
+      fname = os.path.join(imgroot,
+                           relative_path)
+      with open(fname, 'wb') as f:
+          f.write(pic['picture'])
+      imgfilelist_content.append([relative_path, category_id])
+    bar.update()
+  with open(imgfilelist, 'w') as csvfile:
+    writer = csv.writer(csvfile)
+    writer.writerows(imgfilelist_content)
+
+
 def main(argv):
   if FLAGS.loop_and_see_example:
     loop_and_see('../data/train_example.bson', show_img=True)
@@ -90,6 +133,13 @@ def main(argv):
     get_img_cnt_per_prodcuct_histogram('../data/train.bson')
   if FLAGS.get_img_size_stat:
     imgs_size_stat('../data/train.bson')
+  if FLAGS.store_img_as_jpg:
+    imgs_store_jpg('../data/train.bson',
+                   '../data/train_imgfilelist.txt',
+                   '../data/train_imgs')
+    imgs_store_jpg('../data/test.bson',
+                   '../data/test_imgfilelist.txt',
+                   '../data/test_imgs')
 
 if __name__ == '__main__':
   app.run()
