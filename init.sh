@@ -4,5 +4,5 @@
 . ~/work/libs/virtualenv/tensorflow/bin/activate
 
 #unlink data
-ln -s /media/yukun/datafiles/data/CDisCount data
-sudo mount /dev/sda2 /media/yukun/datafiles
+ln -s /media/data/data/CDisCount data
+sudo mount /dev/sda2 /media/data

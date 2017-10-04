@@ -23,6 +23,9 @@ gflags.DEFINE_bool('loop_and_see_example', False,
 gflags.DEFINE_bool('get_img_cnt_hist', False,
                    'Get image count per product histogram.')
 
+gflags.DEFINE_bool('get_img_cnt_hist_test', False,
+                   'Get image count per product histogram for testing data.')
+
 gflags.DEFINE_bool('get_img_size_stat', False,
                    'Calculate mean and std of image width and height.')
 
@@ -38,7 +41,6 @@ def loop_and_see(bson_file, show_img=False):
   num_of_imgs_hist = {}
   for c, d in enumerate(data):
       product_id = d['_id']
-      category_id = d['category_id'] # This won't be in Test data
       cnt = 0;
       for e, pic in enumerate(d['imgs']):
         if show_img:
@@ -126,18 +128,57 @@ def imgs_store_jpg(bson_file,
     writer.writerows(imgfilelist_content)
 
 
+def imgs_store_jpg_test(bson_file,
+    imgfilelist='../data/test_imgfilelist.txt',
+    imgroot='../data/test_imgs/'):
+  # Create categories folders.
+  num_imgs = 3095080
+  num_of_imgs_per_folder = 5000
+  total_num_of_folder = int(np.ceil(
+      1.0 * num_imgs / num_of_imgs_per_folder))
+  for folder_idx in xrange(total_num_of_folder):
+    folder_path = os.path.join(imgroot, str(folder_idx))
+    if not os.path.exists(folder_path):
+      os.mkdir(folder_path)
+  bar = tqdm(total=num_imgs)
+
+  data = bson.decode_file_iter(open(bson_file, 'rb'))
+  imgfilelist_content = []
+  idx = 0
+  for c, d in enumerate(data):
+    product_id = d['_id']
+    for e, pic in enumerate(d['imgs']):
+      folder_name = idx / num_of_imgs_per_folder
+      relative_path = os.path.join(str(folder_name),
+                                   '{}-{}.jpg'.format(product_id, e))
+      fname = os.path.join(imgroot,
+                           relative_path)
+      with open(fname, 'wb') as f:
+          f.write(pic['picture'])
+      imgfilelist_content.append([relative_path])
+      idx += 1
+      bar.update()
+
+  with open(imgfilelist, 'w') as csvfile:
+    writer = csv.writer(csvfile)
+    writer.writerows(imgfilelist_content)
+
+
 def main(argv):
   if FLAGS.loop_and_see_example:
     loop_and_see('../data/train_example.bson', show_img=True)
   if FLAGS.get_img_cnt_hist:
     get_img_cnt_per_prodcuct_histogram('../data/train.bson')
+  if FLAGS.get_img_cnt_hist_test:
+    get_img_cnt_per_prodcuct_histogram('../data/test.bson',
+        stat_file='../data/img_cnt_for_a_prodcuct_histogram_test.txt')
   if FLAGS.get_img_size_stat:
     imgs_size_stat('../data/train.bson')
   if FLAGS.store_img_as_jpg:
     imgs_store_jpg('../data/train.bson',
                    '../data/train_imgfilelist.txt',
                    '../data/train_imgs')
-    imgs_store_jpg('../data/test.bson',
+    imgs_store_jpg_test('../data/test.bson',
                    '../data/test_imgfilelist.txt',
                    '../data/test_imgs')
 
