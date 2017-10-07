@@ -3,7 +3,7 @@
 # File: cdiscount_data.py
 # Author: Yukun Chen <cykustc@gmail.com>
 import os
-import tqdm
+from tqdm import tqdm
 import numpy as np
 import cv2
 
@@ -63,6 +63,31 @@ class Cdiscount(RNGDataFlow):
   def size(self):
     return len(self.imglist)
 
+  def get_per_pixel_mean(self, mean_file='../data/img_mean.jpg'):
+    """
+    return a mean image of all (train and test) images of size
+    180x180x3.
+    """
+    if os.path.exists(mean_file):
+      mean_im = cv2.imread(mean_file, cv2.IMREAD_COLOR)
+      assert mean_im is not None
+    else:
+      print "Calculating per pixel mean image."
+      bar = tqdm(total=self.size())
+      mean_im = np.zeros((180, 180, 3), np.double)
+      for im, label in self.get_data():
+        mean_im += 1.0 * im / self.size()
+        bar.update()
+      cv2.imwrite(mean_file, mean_im)
+    return mean_im
+
+  def get_per_channel_mean(self):
+    """
+    return three values as mean of each channel.
+    """
+    mean = self.get_per_pixel_mean()
+    return np.mean(mean, axis=(0, 1))
+
   def loop_and_see_example_imgs(self, num=20):
     cnt = 0
     for im, label in self.get_data():
@@ -73,10 +98,11 @@ class Cdiscount(RNGDataFlow):
         break
 
 if __name__ == '__main__':
-  ds = Cdiscount('../data/train_imgs_example',
-                 '../data/train_imgfilelist_example.txt',
+  ds = Cdiscount('../data/train_imgs',
+                 '../data/train_imgfilelist.txt',
                  'train')
   ds.reset_state()
-  print ds._get_img_list()
-  ds.loop_and_see_example_imgs(20)
+  #print ds._get_img_list()
+  #ds.loop_and_see_example_imgs(20)
+  ds.get_per_pixel_mean()
 
