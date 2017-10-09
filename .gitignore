@@ -4,4 +4,24 @@ data/*
 imgs/*
 *.sh.o*
 
+# tensorpack specific stuff:
+
 *.pyc
+train_log
+tensorpack/user_ops/obj
+
+*.npy
+*.bin
+*.tfmodel
+*.meta
+*.log*
+model-*
+.gitignore
+*.caffemodel
+*.png
+*.jpg
+checkpoint
+*.json
+*.prototxt
+
+
