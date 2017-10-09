@@ -4,6 +4,7 @@ A set of utils to do data preprocessing and get basic statistics.
 from google.apputils import app
 import gflags
 import numpy as np
+import pickle
 import pandas as pd
 import io
 import os
@@ -33,6 +34,11 @@ gflags.DEFINE_bool('store_img_as_jpg', False,
                    'Store imgs into a 2 level folder hierachy in the format of'
                    'jpg.')
 
+gflags.DEFINE_bool('store_category_id_mapping', False,
+                   'Store the mapping from category id to proxy id:'
+                   '1 to # of category.')
+
+
 def loop_and_see(bson_file, show_img=False):
   """
   Return: a dictionary of {num of imgs for a product: cnt}
@@ -57,7 +63,7 @@ def loop_and_see(bson_file, show_img=False):
 
 
 def get_img_cnt_per_prodcuct_histogram(bson_file,
-    stat_file='../data/img_cnt_for_a_prodcuct_histogram.txt'):
+    stat_file='./data/img_cnt_for_a_prodcuct_histogram.txt'):
   num_of_imgs_hist = loop_and_see(bson_file)
   print num_of_imgs_hist
   with open(stat_file, 'wb') as f:
@@ -67,7 +73,7 @@ def get_img_cnt_per_prodcuct_histogram(bson_file,
 
 
 def imgs_size_stat(bson_file,
-    stat_file='../data/img_size_stat.txt'):
+    stat_file='./data/img_size_stat.txt'):
   data = bson.decode_file_iter(open(bson_file, 'rb'))
   num_of_imgs_hist = {}
   # num_of_imgs = 4369441 + 1128588 * 2 + 542792 * 3 + 1029075 * 4
@@ -94,10 +100,10 @@ def imgs_size_stat(bson_file,
 
 
 def imgs_store_jpg(bson_file,
-    imgfilelist='../data/train_imgfilelist.txt',
-    imgroot='../data/train_imgs/'):
+    imgfilelist='./data/train_imgfilelist.txt',
+    imgroot='./data/train_imgs/'):
   # Create categories folders.
-  categories = pd.read_csv('../data/category_names.csv', index_col='category_id')
+  categories = pd.read_csv('./data/category_names.csv', index_col='category_id')
 
   if not os.path.exists(imgroot):
     os.mkdir(imgroot)
@@ -128,9 +134,22 @@ def imgs_store_jpg(bson_file,
     writer.writerows(imgfilelist_content)
 
 
+def store_category_id_mapping():
+  categories = pd.read_csv('./data/category_names.csv', index_col='category_id')
+  category_ids = list(categories.index)
+  mapping_dict = {id:new_id for id,new_id in zip(category_ids,
+    range(len(category_ids)))};
+  inverse_mapping_dict = {new_id:id for id,new_id in zip(category_ids,
+    range(len(category_ids)))};
+  with open('./data/category_id_mapping.pkl', 'wb') as f:
+    pickle.dump(mapping_dict, f)
+  with open('./data/inv_category_id_mapping.pkl', 'wb') as f:
+    pickle.dump(inverse_mapping_dict, f)
+
+
 def imgs_store_jpg_test(bson_file,
-    imgfilelist='../data/test_imgfilelist.txt',
-    imgroot='../data/test_imgs/'):
+    imgfilelist='./data/test_imgfilelist.txt',
+    imgroot='./data/test_imgs/'):
   # Create categories folders.
   num_imgs = 3095080
   num_of_imgs_per_folder = 5000
@@ -181,6 +200,9 @@ def main(argv):
     imgs_store_jpg_test('../data/test.bson',
                    '../data/test_imgfilelist.txt',
                    '../data/test_imgs')
+  if FLAGS.store_category_id_mapping:
+    store_category_id_mapping()
+
 
 if __name__ == '__main__':
   app.run()

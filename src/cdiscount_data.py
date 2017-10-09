@@ -4,6 +4,7 @@
 # Author: Yukun Chen <cykustc@gmail.com>
 from google.apputils import app
 import gflags
+import pickle
 import os
 from tqdm import tqdm
 import numpy as np
@@ -44,6 +45,7 @@ class Cdiscount(RNGDataFlow):
     assert name in ['train', 'val', 'test']
     self.full_path = dir
     self.filepath_label_file = filepath_label_file
+    self.mapping, self.inv_mapping = self._get_category_id_mapping()
     self.imglist = self._get_img_list(name)
     if shuffle == None:
       shuffle = name == 'train'
@@ -52,6 +54,13 @@ class Cdiscount(RNGDataFlow):
     for fname, _ in self.imglist[:10]:
       fname = os.path.join(self.full_path, fname)
       assert os.path.isfile(fname), fname
+
+  def _get_category_id_mapping(self):
+    with open('./data/category_id_mapping.pkl', 'rb') as f:
+      mapping = pickle.load(f)
+    with open('./data/inv_category_id_mapping.pkl', 'rb') as f:
+      inv_mapping = pickle.load(f)
+    return [mapping, inv_mapping]
 
   def _get_train_val_split(self, total_num_imgs):
     """Split the orginal training set to train and validation set. (0.8, 0.2)
@@ -67,6 +76,7 @@ class Cdiscount(RNGDataFlow):
       for line in f.readlines():
         name, cls = line.strip().split(',')
         cls = int(cls)
+        cls = self.mapping[cls]
         ret.append([name, cls])
     assert len(ret)
     train_val_split = self._get_train_val_split(len(ret))
@@ -131,33 +141,33 @@ class Cdiscount(RNGDataFlow):
 
 def main(argv):
   if FLAGS.loop_and_see_example_imgs:
-    ds = Cdiscount('../data/train_imgs_example',
-                   '../data/train_imgfilelist_example.txt',
+    ds = Cdiscount('./data/train_imgs_example',
+                   './data/train_imgfilelist_example.txt',
                    'train')
     ds.reset_state()
     print len(ds._get_img_list('train'))
     print len(ds._get_img_list('val'))
     ds.loop_and_see_example_imgs(20)
   if FLAGS.get_per_pixel_mean_img:
-    ds = Cdiscount('../data/train_imgs',
-                   '../data/train_imgfilelist.txt',
+    ds = Cdiscount('./data/train_imgs',
+                   './data/train_imgfilelist.txt',
                    'train')
     ds.reset_state()
     ds.get_per_pixel_mean()
   if FLAGS.test_batch_data:
-    ds = Cdiscount('../data/train_imgs',
-                   '../data/train_imgfilelist.txt',
+    ds = Cdiscount('./data/train_imgs',
+                   './data/train_imgfilelist.txt',
                    'train')
     ds.reset_state()
     ds1 = BatchData(ds, 256, use_list=True)
     TestDataSpeed(ds1).start()
   if FLAGS.create_lmdb:
-    ds = Cdiscount('../data/train_imgs',
-                   '../data/train_imgfilelist.txt',
+    ds = Cdiscount('./data/train_imgs',
+                   './data/train_imgfilelist.txt',
                    'train')
     ds.reset_state()
     ds1 = PrefetchDataZMQ(ds, nr_proc=1)
-    dftools.dump_dataflow_to_lmdb(ds1, '../data/Cdiscount-train.lmdb')
+    dftools.dump_dataflow_to_lmdb(ds1, './data/Cdiscount-train.lmdb')
 
 
 
