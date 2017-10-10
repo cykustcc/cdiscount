@@ -249,12 +249,12 @@ def main(argv):
     get_img_cnt_per_prodcuct_histogram('./data/test.bson',
         stat_file='./data/img_cnt_for_a_prodcuct_histogram_test.txt')
   if FLAGS.get_img_size_stat:
-    imgs_size_stat('../data/train.bson')
+    imgs_size_stat('./data/train.bson')
   if FLAGS.store_img_as_jpg:
     imgs_store_jpg('./data/train.bson',
                    './data/train_imgfilelist.txt',
                    './data/train_imgs')
-    imgs_store_jpg_test('../data/test.bson',
+    imgs_store_jpg_test('./data/test.bson',
                    './data/test_imgfilelist.txt',
                    './data/test_imgs')
   if FLAGS.store_category_id_mapping:
