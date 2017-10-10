@@ -8,6 +8,7 @@ imgs/*
 
 *.pyc
 train_log
+train_log~
 tensorpack/user_ops/obj
 
 *.npy

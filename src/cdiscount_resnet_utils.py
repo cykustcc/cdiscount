@@ -26,7 +26,8 @@ def image_preprocess(image, bgr=True):
     image = image * (1.0 / 255)
 
     # TODO(yukun, replace with mean and std of cdiscount dataset
-    mean = [0.485, 0.456, 0.406]    # rgb
+    #mean = [0.485, 0.456, 0.406]    # rgb
+    mean = [0.783, 0.766, 0.757]
     std = [0.229, 0.224, 0.225]
     if bgr:
       mean = mean[::-1]

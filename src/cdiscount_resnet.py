@@ -48,7 +48,7 @@ gflags.DEFINE_string('load', None,
 gflags.DEFINE_string('gpu', None,
                      'specify which gpu(s) to be used.')
 
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 INPUT_SHAPE = 180
 
 RESNET_CONFIG = {

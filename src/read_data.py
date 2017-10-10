@@ -4,6 +4,7 @@ A set of utils to do data preprocessing and get basic statistics.
 from google.apputils import app
 import gflags
 import numpy as np
+import cv2
 import pickle
 import pandas as pd
 import io
@@ -33,6 +34,14 @@ gflags.DEFINE_bool('get_img_size_stat', False,
 gflags.DEFINE_bool('store_img_as_jpg', False,
                    'Store imgs into a 2 level folder hierachy in the format of'
                    'jpg.')
+
+gflags.DEFINE_bool('get_per_pixel_mean', False,
+                   'Calculate per pixel mean image and store it to '
+                   './data/img_mean.jpg')
+
+gflags.DEFINE_bool('get_per_pixel_std', False,
+                   'Calculate per pixel std image and store it to '
+                   './data/img_std.jpg')
 
 gflags.DEFINE_bool('store_category_id_mapping', False,
                    'Store the mapping from category id to proxy id:'
@@ -134,6 +143,54 @@ def imgs_store_jpg(bson_file,
     writer.writerows(imgfilelist_content)
 
 
+def get_per_pixel_mean(bson_file,
+                       mean_file='./data/img_mean.jpg'):
+  """
+  return a mean image of all (train and test) images of size
+  180x180x3.
+  """
+  print "Calculating per pixel mean image."
+  num_imgs = 12371293
+  bar = tqdm(total=num_imgs)
+  data = bson.decode_file_iter(open(bson_file, 'rb'))
+  imgfilelist_content = []
+  mean_im = np.zeros((180, 180, 3), np.double)
+  for c, d in enumerate(data):
+    product_id = d['_id']
+    category_id = d['category_id'] # This won't be in Test data
+    for e, pic in enumerate(d['imgs']):
+      im = np.array(imread(io.BytesIO(pic['picture'])))
+      mean_im += 1.0 * im / num_imgs
+      bar.update()
+  print mean_im
+  cv2.imwrite(mean_file, mean_im)
+
+def get_per_pixel_std(bson_file,
+                      mean_file='./data/img_mean.jpg',
+                      std_file="./data/img_std.jpg"):
+  """
+  return a std image of all (train and test) images of size
+  180x180x3.
+  """
+  print "Calculating per pixel mean image."
+  num_imgs = 12371293
+  bar = tqdm(total=num_imgs)
+  data = bson.decode_file_iter(open(bson_file, 'rb'))
+  imgfilelist_content = []
+  mean_im = cv2.imread(mean_file, cv2.IMREAD_COLOR)
+  std_im = np.zeros((180, 180, 3), np.double)
+  for c, d in enumerate(data):
+    product_id = d['_id']
+    category_id = d['category_id'] # This won't be in Test data
+    for e, pic in enumerate(d['imgs']):
+      im = np.array(imread(io.BytesIO(pic['picture'])))
+      std_im += np.square(1.0 * im - 1.0 * mean_im) / num_imgs
+      bar.update()
+  std_im = np.sqrt(std_im)
+  print std_im
+  cv2.imwrite(std_file, std_im)
+
+
 def store_category_id_mapping():
   categories = pd.read_csv('./data/category_names.csv', index_col='category_id')
   category_ids = list(categories.index)
@@ -185,24 +242,27 @@ def imgs_store_jpg_test(bson_file,
 
 def main(argv):
   if FLAGS.loop_and_see_example:
-    loop_and_see('../data/train_example.bson', show_img=True)
+    loop_and_see('./data/train_example.bson', show_img=True)
   if FLAGS.get_img_cnt_hist:
-    get_img_cnt_per_prodcuct_histogram('../data/train.bson')
+    get_img_cnt_per_prodcuct_histogram('./data/train.bson')
   if FLAGS.get_img_cnt_hist_test:
-    get_img_cnt_per_prodcuct_histogram('../data/test.bson',
-        stat_file='../data/img_cnt_for_a_prodcuct_histogram_test.txt')
+    get_img_cnt_per_prodcuct_histogram('./data/test.bson',
+        stat_file='./data/img_cnt_for_a_prodcuct_histogram_test.txt')
   if FLAGS.get_img_size_stat:
     imgs_size_stat('../data/train.bson')
   if FLAGS.store_img_as_jpg:
-    imgs_store_jpg('../data/train.bson',
-                   '../data/train_imgfilelist.txt',
-                   '../data/train_imgs')
+    imgs_store_jpg('./data/train.bson',
+                   './data/train_imgfilelist.txt',
+                   './data/train_imgs')
     imgs_store_jpg_test('../data/test.bson',
-                   '../data/test_imgfilelist.txt',
-                   '../data/test_imgs')
+                   './data/test_imgfilelist.txt',
+                   './data/test_imgs')
   if FLAGS.store_category_id_mapping:
     store_category_id_mapping()
-
+  if FLAGS.get_per_pixel_mean:
+    get_per_pixel_mean('./data/train.bson')
+  if FLAGS.get_per_pixel_std:
+    get_per_pixel_std('./data/train.bson')
 
 if __name__ == '__main__':
   app.run()

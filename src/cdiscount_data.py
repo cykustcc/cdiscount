@@ -27,6 +27,11 @@ gflags.DEFINE_bool('test_batch_data', False,
 gflags.DEFINE_bool('create_lmdb', False,
                    'Create lmdb for training set for sequential read.')
 
+gflags.DEFINE_bool('get_per_channel_mean', False,
+                   'Get per channel mean.')
+
+gflags.DEFINE_bool('get_per_channel_std', False,
+                   'Get per channel std.')
 
 __all__ = ['Cdiscount']
 
@@ -105,7 +110,7 @@ class Cdiscount(RNGDataFlow):
   def size(self):
     return len(self.imglist)
 
-  def get_per_pixel_mean(self, mean_file='../data/img_mean.jpg'):
+  def get_per_pixel_mean(self, mean_file='./data/img_mean.jpg'):
     """
     return a mean image of all (train and test) images of size
     180x180x3.
@@ -114,13 +119,7 @@ class Cdiscount(RNGDataFlow):
       mean_im = cv2.imread(mean_file, cv2.IMREAD_COLOR)
       assert mean_im is not None
     else:
-      print "Calculating per pixel mean image."
-      bar = tqdm(total=self.size())
-      mean_im = np.zeros((180, 180, 3), np.double)
-      for im, label in self.get_data():
-        mean_im += 1.0 * im / self.size()
-        bar.update()
-      cv2.imwrite(mean_file, mean_im)
+      raise ValueError('Failed to find file: ' + mean_file)
     return mean_im
 
   def get_per_channel_mean(self):
@@ -168,7 +167,12 @@ def main(argv):
     ds.reset_state()
     ds1 = PrefetchDataZMQ(ds, nr_proc=1)
     dftools.dump_dataflow_to_lmdb(ds1, './data/Cdiscount-train.lmdb')
-
+  if FLAGS.get_per_channel_mean:
+    ds = Cdiscount('./data/train_imgs',
+                   './data/train_imgfilelist.txt',
+                   'train')
+    ds.reset_state()
+    print ds.get_per_channel_mean()
 
 
 
