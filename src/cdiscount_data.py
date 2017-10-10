@@ -129,6 +129,25 @@ class Cdiscount(RNGDataFlow):
     mean = self.get_per_pixel_mean()
     return np.mean(mean, axis=(0, 1))
 
+  def get_per_pixel_std(self, std_file='./data/img_std.jpg'):
+    """
+    return a std image of all (train and test) images of size
+    180x180x3.
+    """
+    if os.path.exists(std_file):
+      std_im = cv2.imread(std_file, cv2.IMREAD_COLOR)
+      assert std_im is not None
+    else:
+      raise ValueError('Failed to find file: ' + mean_file)
+    return std_im
+
+  def get_per_channel_std(self):
+    """
+    return three values as std of each channel.
+    """
+    std = self.get_per_pixel_std()
+    return np.sqrt(np.mean(np.square(std), axis=(0, 1)))
+
   def loop_and_see_example_imgs(self, num=20):
     cnt = 0
     for im, label in self.get_data():
@@ -173,6 +192,14 @@ def main(argv):
                    'train')
     ds.reset_state()
     print ds.get_per_channel_mean()
+  if FLAGS.get_per_channel_std:
+    ds = Cdiscount('./data/train_imgs',
+                   './data/train_imgfilelist.txt',
+                   'train')
+    ds.reset_state()
+    print ds.get_per_channel_std()
+
+
 
 
 
