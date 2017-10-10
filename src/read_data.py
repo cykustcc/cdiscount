@@ -172,7 +172,7 @@ def get_per_pixel_std(bson_file,
   return a std image of all (train and test) images of size
   180x180x3.
   """
-  print "Calculating per pixel mean image."
+  print "Calculating per pixel std image."
   num_imgs = 12371293
   bar = tqdm(total=num_imgs)
   data = bson.decode_file_iter(open(bson_file, 'rb'))
