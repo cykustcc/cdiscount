@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 import os
 import multiprocessing
+import socket
 
 from google.apputils import app
 import gflags
@@ -31,7 +32,10 @@ from .cdiscount_resnet_utils import *
 FLAGS = gflags.FLAGS
 
 gflags.DEFINE_integer('resnet_depth', 18,
-                    'depth of resnet, should be one of [18, 34, 50, 101].')
+                      'depth of resnet, should be one of [18, 34, 50, 101].')
+
+gflags.DEFINE_bool('load_all_imgs_to_memory', False,
+                   'Load all training images to memory before training.')
 
 gflags.DEFINE_string('datadir', './data/train_imgs',
                      'folder to store jpg imgs')
@@ -48,7 +52,14 @@ gflags.DEFINE_string('load', None,
 gflags.DEFINE_string('gpu', None,
                      'specify which gpu(s) to be used.')
 
-BATCH_SIZE = 128
+gflags.DEFINE_string('log_dir_name_suffix', "",
+                     'suffix of the model checkpoint folder name.')
+
+
+if socket.gethostname() == "localhost.localdomain":
+  BATCH_SIZE = 512
+else:
+  BATCH_SIZE = 128
 INPUT_SHAPE = 180
 
 RESNET_CONFIG = {
@@ -93,7 +104,7 @@ def get_data(train_or_test):
   isTrain = train_or_test == 'train'
 
   ds = Cdiscount(FLAGS.datadir, FLAGS.filepath_label_file, train_or_test,
-                 shuffle=isTrain)
+                 shuffle=isTrain, large_mem_sys=FLAGS.load_all_imgs_to_memory)
   #augmentors = fbresnet_augmentor(isTrain)
   #augmentors.append(imgaug.ToUint8())
 
@@ -132,7 +143,8 @@ def main(argv):
 
   model = Model(FLAGS.resnet_depth)
   logger.set_logger_dir(
-      os.path.join('train_log', 'imagenet-resnet-d' + str(FLAGS.resnet_depth)))
+      os.path.join('train_log', 'cdiscount-resnet-d' + str(FLAGS.resnet_depth)
+        + str(FLAGS.log_dir_name_suffix)))
   config = get_config(model)
   if FLAGS.load:
     config.session_init = get_model_loader(FLAGS.load)
