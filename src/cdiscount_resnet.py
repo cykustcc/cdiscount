@@ -57,9 +57,9 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 
 
 if socket.gethostname() == "localhost.localdomain":
-  BATCH_SIZE = 512
+  TOTAL_BATCH_SIZE = 512
 else:
-  BATCH_SIZE = 128
+  TOTAL_BATCH_SIZE = 128
 INPUT_SHAPE = 180
 
 RESNET_CONFIG = {
@@ -96,7 +96,7 @@ class Model(ModelDesc):
     return tf.train.MomentumOptimizer(lr, 0.9, use_nesterov=True)
 
 
-def get_data(train_or_test):
+def get_data(train_or_test, batch):
   """
   Args:
     train_or_test: should be one of {'train', 'test', 'val'}
@@ -111,29 +111,40 @@ def get_data(train_or_test):
   #ds = AugmentImageComponent(ds, augmentors, copy=False)
   if isTrain:
       ds = PrefetchDataZMQ(ds, min(20, multiprocessing.cpu_count()))
-  ds = BatchData(ds, BATCH_SIZE, remainder=not isTrain)
+  ds = BatchData(ds, batch, remainder=not isTrain)
   return ds
 
 
 def get_config(model):
-  logger.info("Batch size : {}".format(BATCH_SIZE))
-  dataset_train = get_data('train')
-  dataset_val = get_data('val')
+  nr_tower = max(get_nr_gpu(), 1)
+  batch = TOTAL_BATCH_SIZE // nr_tower
+  logger.info("Running on {} towers. Batch size per tower:{}".format(nr_tower,
+                                                                     batch))
 
+  dataset_train = get_data('train', batch)
+  dataset_val = get_data('val', batch)
+  infs = [ClassificationError('wrong-top1', 'val-error-top1'),
+          ClassificationError('wrong-top5', 'val-error-top5')]
+  callbacks=[
+    ModelSaver(),
+    ScheduledHyperParamSetter('learning_rate',
+                              [(30, 1e-2), (60, 1e-3), (85, 1e-4), (95, 1e-5), (105, 1e-6)]),
+    HumanHyperParamSetter('learning_rate'),
+  ]
+  if nr_tower == 1:
+    # single-GPU inference with queue prefetch
+    callbacks.append(InferenceRunner(QueueInput(dataset_val), infs))
+  else:
+    # multi-GPU inference (with mandatory queue prefetch)
+    callbacks.append(DataParallelInferenceRunner(
+        dataset_val, infs, list(range(nr_tower))))
   return TrainConfig(
-      model=model,
-      dataflow=dataset_train,
-      callbacks=[
-          ModelSaver(),
-          InferenceRunner(dataset_val, [
-              ClassificationError('wrong-top1', 'val-error-top1'),
-              ClassificationError('wrong-top5', 'val-error-top5')]),
-          ScheduledHyperParamSetter('learning_rate',
-                                    [(30, 1e-2), (60, 1e-3), (85, 1e-4), (95, 1e-5), (105, 1e-6)]),
-          HumanHyperParamSetter('learning_rate'),
-      ],
-      steps_per_epoch=5000,
-      max_epoch=110,
+    model=model,
+    dataflow=dataset_train,
+    callbacks=callbacks,
+    steps_per_epoch=5000,
+    max_epoch=110,
+    nr_tower=nr_tower
   )
 
 
@@ -148,7 +159,8 @@ def main(argv):
   config = get_config(model)
   if FLAGS.load:
     config.session_init = get_model_loader(FLAGS.load)
-  SimpleTrainer(config).train()
+  SyncMultiGPUTrainerParameterServer(config).train()
+  #SimpleTrainer(config).train()
 
 
 if __name__ == '__main__':
