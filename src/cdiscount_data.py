@@ -81,12 +81,12 @@ class Cdiscount(RNGDataFlow):
     return [mapping, inv_mapping]
 
   def _get_train_val_split(self, total_num_imgs):
-    """Split the orginal training set to train and validation set. (0.98, 0.02)
+    """Split the orginal training set to train and validation set. (0.96, 0.04)
       Return: a list of [True, False,...]
       True is training set datapoint and False is validation set datapoint.
     """
     np.random.seed(0)
-    return list(np.greater(np.random.random(total_num_imgs), 0.02))
+    return list(np.greater(np.random.random(total_num_imgs), 0.04))
 
   def _load_imgs_to_memory(self, train_or_val_or_test):
     if train_or_val_or_test == 'train' or train_or_val_or_test == 'val':
