@@ -87,7 +87,7 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
                      'suffix of the model checkpoint folder name.')
 
 
-if socket.gethostname() == "localhost.localdomain":
+if socket.gethostname() == "ESC8000":
   TOTAL_BATCH_SIZE = 512
 else:
   TOTAL_BATCH_SIZE = 192

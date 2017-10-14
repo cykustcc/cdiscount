@@ -7,3 +7,4 @@ python-gflags
 glog
 tqdm
 ipywidgets
+opencv-python
