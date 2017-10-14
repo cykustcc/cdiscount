@@ -9,9 +9,10 @@ Example Usage: (assume you should in ../src)
 python -m src.cdiscount_resnet --gpu=0,1,2,3 --resnet_depth=50
 
 python -m src.cdiscount_resnet \
+    --gpu=15 \
     --resnet_depth=50 \
     --pred_test=True \
-    --model_path_for_pred=./train_log/train_log/cdiscount-resnet-d18/model-20000
+    --model_path_for_pred=./train_log/cdiscount-resnet-d18/model-20000
 """
 import sys
 import argparse
@@ -88,9 +89,11 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 
 
 if socket.gethostname() == "ESC8000":
-  TOTAL_BATCH_SIZE = 512
+  TOTAL_BATCH_SIZE = 1536
+  PRED_BATCH_SIZE = 256
 else:
   TOTAL_BATCH_SIZE = 192
+  PRED_BATCH_SIZE = 128
 INPUT_SHAPE = 180
 
 RESNET_CONFIG = {
@@ -179,7 +182,6 @@ def get_config(model):
   )
 
 def make_pred(model, train_or_test_or_val):
-  PRED_BATCH_SIZE = 128
   if train_or_test_or_val == 'test':
     ds0 = Cdiscount(FLAGS.datadir_test, FLAGS.img_list_file_test, 'test',
                    shuffle=False)
@@ -203,20 +205,23 @@ def make_pred(model, train_or_test_or_val):
       train_or_test_or_val + str(FLAGS.log_dir_name_suffix) + '.txt')
   with open(pred_fname, 'w') as f:
     writer = csv.writer(f)
-    with tqdm.tqdm(total=ds.size(), **get_tqdm_kwargs()) as pbar:
+    logger.info("make prediction for {} dataset:".format(train_or_test_or_val))
+    with tqdm.tqdm(total=ds0.size(), **get_tqdm_kwargs()) as pbar:
       #MAX_ITER = PRED_BATCH_SIZE
       iter_cnt = 0
       for im, _ in ds.get_data():
         output_prob = pred([im])[0]
+        batched_line_content = []
         for prob in output_prob:
           # top 10 categories' psuedo id (0 to 5269) in descending order
           top_10_pseudo_id = prob.argsort()[-10:][::-1]
           top_10_prob = prob[top_10_pseudo_id]
           fname = ds0.imglist[iter_cnt][0]
           line_content = [fname] + list(top_10_pseudo_id) + list(top_10_prob)
-          writer.writerow(line_content)
+          batched_line_content.append(line_content)
           iter_cnt += 1
-          pbar.update(1)
+        writer.writerows(batched_line_content)
+        pbar.update(PRED_BATCH_SIZE)
         #if iter_cnt >= MAX_ITER:
           #break
 
