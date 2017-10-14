@@ -93,6 +93,7 @@ class Cdiscount(RNGDataFlow):
       imgroot = './data/train_imgs/'
       bson_file = './data/train.bson'
       num_imgs = 12371293
+
     elif train_or_val_or_test == 'test':
       imgroot = './data/test_imgs/'
       bson_file = './data/test.bson'
@@ -115,6 +116,8 @@ class Cdiscount(RNGDataFlow):
         bar.update()
 
   def _get_img_list(self, train_or_val_or_test):
+    if train_or_val_or_test == 'test':
+      return self._get_img_list_test()
     with open(self.filepath_label_file) as f:
       ret = []
       for line in f.readlines():
@@ -128,8 +131,15 @@ class Cdiscount(RNGDataFlow):
       return [ret[i] for i in xrange(len(ret)) if train_val_split[i]]
     elif train_or_val_or_test == 'val':
       return [ret[i] for i in xrange(len(ret)) if not train_val_split[i]]
-    else:
-      return ret
+
+  def _get_img_list_test(self):
+    with open(self.filepath_label_file) as f:
+      ret = []
+      for line in f.readlines():
+        name = line.strip()
+        ret.append([name, -1])
+    assert len(ret)
+    return ret
 
   def get_data(self):
     for fname, label in self.get_filename_label():

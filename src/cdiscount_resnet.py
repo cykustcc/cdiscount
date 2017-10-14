@@ -2,12 +2,25 @@
 # -*- coding: utf-8 -*-
 # File: cdiscount_resnet.py
 # Author: Yukun Chen <cykustc@gmail.com>
+r"""
+File to run resnet model on cdiscount data.
+
+Example Usage: (assume you should in ../src)
+python -m src.cdiscount_resnet --gpu=0,1,2,3 --resnet_depth=50
+
+python -m src.cdiscount_resnet \
+    --resnet_depth=50 \
+    --pred_test=True \
+    --model_path_for_pred=./train_log/train_log/cdiscount-resnet-d18/model-20000
+"""
 import sys
 import argparse
 import numpy as np
 import os
 import multiprocessing
 import socket
+import csv
+import tqdm
 
 from google.apputils import app
 import gflags
@@ -19,10 +32,12 @@ from tensorpack.models import *
 from tensorpack.callbacks import *
 from tensorpack.train import (TrainConfig, SimpleTrainer,
     SyncMultiGPUTrainerParameterServer)
+from tensorpack.predict import OfflinePredictor
 from tensorpack.dataflow import (imgaug, FakeData, PrefetchDataZMQ, BatchData,
     ThreadedMapData)
 from tensorpack.tfutils import argscope, get_model_loader
 from tensorpack.utils.gpu import get_nr_gpu
+from tensorpack.utils.utils import get_tqdm_kwargs
 from tensorpack.tfutils.symbolic_functions import *
 from tensorpack.tfutils.summary import *
 
@@ -40,17 +55,33 @@ gflags.DEFINE_bool('load_all_imgs_to_memory', False,
 gflags.DEFINE_string('datadir', './data/train_imgs',
                      'folder to store jpg imgs')
 
-gflags.DEFINE_string('filepath_label_file', './data/train_imgfilelist.txt',
+gflags.DEFINE_string('datadir_test', './data/test_imgs',
                      'folder to store jpg imgs')
 
 gflags.DEFINE_string('img_list_file', './data/train_imgfilelist.txt',
-                     'path of the file store (image, label) list.')
+                     'path of the file store (image, label) list of training'
+                     'set.')
+
+gflags.DEFINE_string('img_list_file_test', './data/test_imgfilelist.txt',
+                     'path of the file store (image, label) list of test set')
 
 gflags.DEFINE_string('load', None,
                      'load model.')
 
 gflags.DEFINE_string('gpu', None,
                      'specify which gpu(s) to be used.')
+
+gflags.DEFINE_bool('pred_train', False,
+                   'If true, run prediction on rain set without training.'
+                   '(using existed model.)')
+
+gflags.DEFINE_bool('pred_test', False,
+                   'If true, run prediction on test set without training.'
+                   '(using existed model.)')
+
+
+gflags.DEFINE_string('model_path_for_pred', "",
+                     'model path for prediction on test set.')
 
 gflags.DEFINE_string('log_dir_name_suffix', "",
                      'suffix of the model checkpoint folder name.')
@@ -59,7 +90,7 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 if socket.gethostname() == "localhost.localdomain":
   TOTAL_BATCH_SIZE = 512
 else:
-  TOTAL_BATCH_SIZE = 128
+  TOTAL_BATCH_SIZE = 192
 INPUT_SHAPE = 180
 
 RESNET_CONFIG = {
@@ -103,7 +134,7 @@ def get_data(train_or_test, batch):
   """
   isTrain = train_or_test == 'train'
 
-  ds = Cdiscount(FLAGS.datadir, FLAGS.filepath_label_file, train_or_test,
+  ds = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, train_or_test,
                  shuffle=isTrain, large_mem_sys=FLAGS.load_all_imgs_to_memory)
   #augmentors = fbresnet_augmentor(isTrain)
   #augmentors.append(imgaug.ToUint8())
@@ -147,20 +178,66 @@ def get_config(model):
     nr_tower=nr_tower
   )
 
+def make_pred(model, train_or_test_or_val):
+  PRED_BATCH_SIZE = 128
+  if train_or_test_or_val == 'test':
+    ds0 = Cdiscount(FLAGS.datadir_test, FLAGS.img_list_file_test, 'test',
+                   shuffle=False)
+  elif train_or_test_or_val == 'train':
+    ds0 = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, 'train',
+                   shuffle=False)
+  ds = BatchData(ds0, PRED_BATCH_SIZE, remainder=True)
+  assert FLAGS.model_path_for_pred!="", "no model_path_for_pred specified!"
+  pred_config = PredictConfig(
+      model=model,
+      session_init=get_model_loader(FLAGS.model_path_for_pred),
+      input_names=['input'],
+      output_names=['output-prob'])
+  pred = OfflinePredictor(pred_config)
+
+  pred_folder = './data/pred/'
+  if not os.path.exists(pred_folder):
+    os.mkdir(pred_folder)
+  pred_fname = os.path.join(pred_folder,
+      'pred-' + 'cdiscount-resnet-d' + str(FLAGS.resnet_depth) +
+      train_or_test_or_val + str(FLAGS.log_dir_name_suffix) + '.txt')
+  with open(pred_fname, 'w') as f:
+    writer = csv.writer(f)
+    with tqdm.tqdm(total=ds.size(), **get_tqdm_kwargs()) as pbar:
+      #MAX_ITER = PRED_BATCH_SIZE
+      iter_cnt = 0
+      for im, _ in ds.get_data():
+        output_prob = pred([im])[0]
+        for prob in output_prob:
+          # top 10 categories' psuedo id (0 to 5269) in descending order
+          top_10_pseudo_id = prob.argsort()[-10:][::-1]
+          top_10_prob = prob[top_10_pseudo_id]
+          fname = ds0.imglist[iter_cnt][0]
+          line_content = [fname] + list(top_10_pseudo_id) + list(top_10_prob)
+          writer.writerow(line_content)
+          iter_cnt += 1
+          pbar.update(1)
+        #if iter_cnt >= MAX_ITER:
+          #break
 
 def main(argv):
   if FLAGS.gpu:
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
   model = Model(FLAGS.resnet_depth)
-  logger.set_logger_dir(
-      os.path.join('train_log', 'cdiscount-resnet-d' + str(FLAGS.resnet_depth)
-        + str(FLAGS.log_dir_name_suffix)))
-  config = get_config(model)
-  if FLAGS.load:
-    config.session_init = get_model_loader(FLAGS.load)
-  SyncMultiGPUTrainerParameterServer(config).train()
-  #SimpleTrainer(config).train()
+  if FLAGS.pred_train:
+    make_pred(model, 'train')
+  elif FLAGS.pred_test:
+    make_pred(model, 'test')
+  else:
+    logger.set_logger_dir(
+        os.path.join('train_log', 'cdiscount-resnet-d' + str(FLAGS.resnet_depth)
+          + str(FLAGS.log_dir_name_suffix)))
+    config = get_config(model)
+    if FLAGS.load:
+      config.session_init = get_model_loader(FLAGS.load)
+    SyncMultiGPUTrainerParameterServer(config).train()
+    #SimpleTrainer(config).train()
 
 
 if __name__ == '__main__':

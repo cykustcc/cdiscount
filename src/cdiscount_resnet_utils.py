@@ -40,6 +40,8 @@ def image_preprocess(image, bgr=True):
 
 
 def compute_loss_and_error(logits, label):
+    prob = tf.nn.softmax(logits, name='output-prob')
+
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=label)
     loss = tf.reduce_mean(loss, name='xentropy-loss')
 
