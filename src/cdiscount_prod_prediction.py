@@ -2,6 +2,14 @@
 # -*- coding: utf-8 -*-
 # File: cdiscount_prod_prediction.py
 # Author: Yukun Chen <cykustc@gmail.com>
+r"""
+Make per product category predicction based on per image prediction from
+Neural nets.
+Example usage:
+  python -m src.cdiscount_prod_prediction \
+--nn_pred_file=data/pred/<filename>.txt \
+--pos_decay_base=1.1
+"""
 from google.apputils import app
 import gflags
 import csv
@@ -16,6 +24,10 @@ FLAGS=gflags.FLAGS
 
 gflags.DEFINE_string('nn_pred_file', "",
                      'Neural Net outputed top 10 per image prediction file.')
+
+gflags.DEFINE_float('pos_decay_base', 1.1,
+                    'position decay base.')
+
 
 class PerProdInfo():
   """ Per product prediction info given by neural net per image info.
@@ -66,19 +78,15 @@ class ProdPred():
   """ Class for make per product prediction.
   """
   def __init__(self, top10_per_im_inference_file,
-      inv_id_map_file="./data/inv_category_id_mapping.pkl"):
+      inv_id_map_file="./data/inv_category_id_mapping.pkl",
+      pos_decay_base=1.1):
     self.fname = top10_per_im_inference_file
     self.num_products = 0
     self.all_products = []
-    #all_products_file = self.fname.replace(".txt", ".pkl")
-    #if os.path.exists(all_products_file):
-      #logger.info("loading from {}".format(all_products_file))
-      #self.all_products = pickle.load(open(all_products_file, 'rb'))
-    #else:
     self.load_top10_per_im_inf(self.fname)
-    #pickle.dump(self.all_products, open(all_products_file, 'wb'))
     self.num_products = len(self.all_products)
     self.inv_map = pickle.load(open(inv_id_map_file,'rb'))
+    self.pos_decay_base = pos_decay_base
 
 
   def load_top10_per_im_inf(self, top_10_per_im_inference_file):
@@ -119,13 +127,14 @@ class ProdPred():
       writer.writerow(['_id', 'category_id'])
       with tqdm.tqdm(total=self.num_products, **get_tqdm_kwargs()) as pbar:
         for prod in self.all_products:
-          pred_category = prod.pred_category(self.inv_map)
+          pred_category = prod.pred_category(self.inv_map,
+              self.pos_decay_base)
           writer.writerow([prod.prod_id, pred_category])
           pbar.update(1)
 
 
 def main(argv):
-  prod_pred = ProdPred(FLAGS.nn_pred_file)
+  prod_pred = ProdPred(FLAGS.nn_pred_file, pos_decay_base=FLAGS.pos_decay_base)
   prod_pred.make_pred()
 
 if __name__ == "__main__":
