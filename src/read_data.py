@@ -47,6 +47,13 @@ gflags.DEFINE_bool('store_category_id_mapping', False,
                    'Store the mapping from category id to proxy id:'
                    '1 to # of category.')
 
+gflags.DEFINE_bool('compute_category_hist', False,
+                   'compute histogram of per category image cnt.')
+
+gflags.DEFINE_bool('compute_category_hist_test', False,
+                   'compute histogram of per category image cnt for'
+                   'prediction of test set')
+
 
 def loop_and_see(bson_file, show_img=False):
   """
@@ -239,6 +246,27 @@ def imgs_store_jpg_test(bson_file,
     writer = csv.writer(csvfile)
     writer.writerows(imgfilelist_content)
 
+def compute_category_hist(img_list_file="./data/train_imgfilelist.txt",
+                          hist_file="./data/train_category_hist.txt"):
+  hist = {}
+  with open(img_list_file,'r') as f:
+    num_imgs = 12371293
+    bar = tqdm(total=num_imgs)
+    for i, line in enumerate(f):
+      try:
+        category = int(line.strip().split(",")[1])
+      except:
+        continue
+      if category in hist.keys():
+        hist[category] += 1
+      else:
+        hist[category] = 1
+      bar.update(1)
+  with open(hist_file, 'w') as f:
+    writer = csv.writer(f)
+    for k, v in hist.iteritems():
+      writer.writerow([k, v])
+
 
 def main(argv):
   if FLAGS.loop_and_see_example:
@@ -263,6 +291,12 @@ def main(argv):
     get_per_pixel_mean('./data/train.bson')
   if FLAGS.get_per_pixel_std:
     get_per_pixel_std('./data/train.bson')
+  if FLAGS.compute_category_hist:
+    compute_category_hist()
+  if FLAGS.compute_category_hist_test:
+    compute_category_hist("./data/pred/pred-cdiscount-resnet-d50-step75000test_1_0prod.txt",
+        "./data/test_category_hist.txt")
+
 
 if __name__ == '__main__':
   app.run()
