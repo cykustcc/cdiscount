@@ -200,9 +200,11 @@ def make_pred(model, train_or_test_or_val):
   pred_folder = './data/pred/'
   if not os.path.exists(pred_folder):
     os.mkdir(pred_folder)
+  steps = FLAGS.model_path_for_pred.strip().split('-')
+  steps = steps[len(steps) - 1]
   pred_fname = os.path.join(pred_folder,
-      'pred-' + 'cdiscount-resnet-d' + str(FLAGS.resnet_depth) +
-      train_or_test_or_val + str(FLAGS.log_dir_name_suffix) + '.txt')
+      'pred-' + 'cdiscount-resnet-d' + str(FLAGS.resnet_depth) + '-step' +
+      steps + train_or_test_or_val + str(FLAGS.log_dir_name_suffix) + '.txt')
   with open(pred_fname, 'w') as f:
     writer = csv.writer(f)
     logger.info("make prediction for {} dataset:".format(train_or_test_or_val))

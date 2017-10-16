@@ -119,7 +119,8 @@ class ProdPred():
   def make_pred(self):
     """make per product prediction.
     """
-    prod_pred_filename = self.fname.replace(".txt", "_prod.txt")
+    pos_decay_str = str(self.pos_decay_base).replace(".", "_")
+    prod_pred_filename = self.fname.replace(".txt", "_" + pos_decay_str + "prod.txt")
     logger.info("predict category for each of {} products...".format(
         self.num_products))
     with open(prod_pred_filename, 'w') as f:
