@@ -7,12 +7,12 @@ File to run densenet model on cdiscount data.
 reference: https://github.com/YixuanLi/densenet-tensorflow/blob/master/cifar10-densenet.py
 
 Example Usage: (assume you should in ../src)
-python -m src.cdiscount_densenet --gpu=0,1,2,3 --resnet_depth=50
+python -m src.cdiscount_densenet --gpu=0,1,2,3 --densenet_depth=50
 
 python -m src.cdiscount_densenet \
-    --resnet_depth=50 \
+    --densenet_depth=50 \
     --pred_test=True \
-    --model_path_for_pred=./train_log/train_log/cdiscount-resnet-d18/model-20000
+    --model_path_for_pred=./train_log/train_log/cdiscount-densenet-d18/model-20000
 """
 import numpy as np
 import tensorflow as tf
@@ -83,7 +83,7 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 if socket.gethostname() == "ESC8000":
   BATCH_SIZE = 512
 else:
-  BATCH_SIZE = 1
+  BATCH_SIZE = 32
 INPUT_SHAPE = 180
 
 class Model(ModelDesc):
@@ -157,26 +157,8 @@ class Model(ModelDesc):
     add_moving_summary(loss, wd_loss)
     self.cost = tf.add_n([loss, wd_loss], name='cost')
 
-    # prob = tf.nn.softmax(logits, name='output')
 
-    # cost = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=label)
-    # cost = tf.reduce_mean(cost, name='cross_entropy_loss')
-
-    # wrong = prediction_incorrect(logits, label)
-    # # monitor training error
-    # add_moving_summary(tf.reduce_mean(wrong, name='train_error'))
-
-    # # weight decay on all W
-    # wd_cost = tf.multiply(1e-4, regularize_cost('.*/W', tf.nn.l2_loss), name='wd_cost')
-    
-    # loss = compute_loss_and_error(logits, label)
-    # wd_loss = regularize_cost('.*/W', l2_regularizer(1e-4), name='l2_regularize_loss')
-    # add_moving_summary(cost, wd_loss)
-
-    # add_param_summary(('.*/W', ['histogram']))   # monitor W
-    # self.cost = tf.add_n([cost, wd_loss], name='cost')
-
-  def _get_optimizer(self):
+def _get_optimizer(self):
     lr = tf.get_variable('learning_rate', initializer=0.1, trainable=False)
     tf.summary.scalar('learning_rate', lr)
     return tf.train.MomentumOptimizer(lr, 0.9, use_nesterov=True)
@@ -184,32 +166,13 @@ class Model(ModelDesc):
 
 def get_data(train_or_test, batch):
   isTrain = train_or_test == 'train'
-  # ds = dataset.Cifar10(train_or_test)
   ds = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, train_or_test,
                  shuffle=isTrain, large_mem_sys=FLAGS.load_all_imgs_to_memory)
   if isTrain:
       ds = PrefetchDataZMQ(ds, min(20, multiprocessing.cpu_count()))
   ds = BatchData(ds, batch, remainder=not isTrain)
   return ds
-  # pp_mean = ds.get_per_pixel_mean()
-  # if isTrain:
-  #   augmentors = [
-  #     imgaug.CenterPaste((40, 40)),
-  #     imgaug.RandomCrop((32, 32)),
-  #     imgaug.Flip(horiz=True),
-  #     #imgaug.Brightness(20),
-  #     #imgaug.Contrast((0.6,1.4)),
-  #     imgaug.MapImage(lambda x: x - pp_mean),
-  #   ]
-  # else:
-  #   augmentors = [
-  #     imgaug.MapImage(lambda x: x - pp_mean)
-  #   ]
-  # ds = AugmentImageComponent(ds, augmentors)
-  # ds = BatchData(ds, BATCH_SIZE, remainder=not isTrain)
-  # if isTrain:
-  #   ds = PrefetchData(ds, 3, 2)
-  # return ds
+
 
 def get_config(model):
   nr_tower = max(get_nr_gpu(), 1)
@@ -221,8 +184,7 @@ def get_config(model):
   dataset_val = get_data('val', batch)
   infs = [ClassificationError('wrong-top1', 'val-error-top1'),
           ClassificationError('wrong-top5', 'val-error-top5')]
-  # steps_per_epoch = dataset_train.size()
-  # dataset_test = get_data('test')
+  steps_per_epoch = dataset_train.size() // 3
   callbacks=[
     ModelSaver(),
     ScheduledHyperParamSetter('learning_rate',
@@ -241,34 +203,11 @@ def get_config(model):
     dataflow=dataset_train,
     model=model,
     callbacks=callbacks,
-    steps_per_epoch=5000,
+    steps_per_epoch=steps_per_epoch,
     max_epoch=110,
     nr_tower=nr_tower
   )
 
-# if __name__ == '__main__':
-#   parser = argparse.ArgumentParser()
-#   parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.') # nargs='*' in multi mode
-#   parser.add_argument('--load', help='load model')
-#   parser.add_argument('--drop_1', default=150,
-#       help='Epoch to drop learning rate to 0.01.') # nargs='*' in multi mode
-#   parser.add_argument('--drop_2', default=225,
-#       help='Epoch to drop learning rate to 0.001')
-#   parser.add_argument('--depth', default=40,
-#       help='The depth of densenet')
-#   parser.add_argument('--max_epoch', default=300,
-#       help='max epoch')
-#   args = parser.parse_args()
-
-#   if args.gpu:
-#     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-
-#   config = get_config()
-#   if args.load:
-#     config.session_init = SaverRestore(args.load)
-#   if args.gpu:
-#     config.nr_tower = len(args.gpu.split(','))
-#   SyncMultiGPUTrainer(config).train()
 
 def make_pred(model, train_or_test_or_val):
   PRED_BATCH_SIZE = 128
@@ -291,7 +230,7 @@ def make_pred(model, train_or_test_or_val):
   if not os.path.exists(pred_folder):
     os.mkdir(pred_folder)
   pred_fname = os.path.join(pred_folder,
-      'pred-' + 'cdiscount-densenet-d' + str(FLAGS.densenet_depth) + str(FLAGS.densenet_densenet_growth_rate) + 
+      'pred-' + 'cdiscount-densenet-d' + str(FLAGS.densenet_depth) + str(FLAGS.densenet_densenet_growth_rate) +
       train_or_test_or_val + str(FLAGS.log_dir_name_suffix) + '.txt')
   with open(pred_fname, 'w') as f:
     writer = csv.writer(f)
@@ -309,8 +248,7 @@ def make_pred(model, train_or_test_or_val):
           writer.writerow(line_content)
           iter_cnt += 1
           pbar.update(1)
-        #if iter_cnt >= MAX_ITER:
-          #break
+
 
 def main(argv):
   if FLAGS.gpu:
