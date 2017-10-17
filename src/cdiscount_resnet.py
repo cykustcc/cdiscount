@@ -8,6 +8,9 @@ File to run resnet model on cdiscount data.
 Example Usage: (assume you should in ../src)
 python -m src.cdiscount_resnet --gpu=0,1,2,3 --resnet_depth=50
 
+python -m src.cdiscount_resnet --gpu=11,12,13 --resnet_depth=101 \
+    --apply_augmentation
+
 python -m src.cdiscount_resnet \
     --gpu=15 \
     --resnet_depth=50 \
@@ -80,6 +83,8 @@ gflags.DEFINE_bool('pred_test', False,
                    'If true, run prediction on test set without training.'
                    '(using existed model.)')
 
+gflags.DEFINE_bool('apply_augmentation', False,
+                   'If true, Apply image augmentation.')
 
 gflags.DEFINE_string('model_path_for_pred', "",
                      'model path for prediction on test set.')
@@ -89,7 +94,7 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 
 
 if socket.gethostname() == "ESC8000":
-  TOTAL_BATCH_SIZE = 1536
+  TOTAL_BATCH_SIZE = 1792
   PRED_BATCH_SIZE = 256
 else:
   TOTAL_BATCH_SIZE = 192
@@ -139,10 +144,11 @@ def get_data(train_or_test, batch):
 
   ds = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, train_or_test,
                  shuffle=isTrain, large_mem_sys=FLAGS.load_all_imgs_to_memory)
-  #augmentors = fbresnet_augmentor(isTrain)
-  #augmentors.append(imgaug.ToUint8())
+  if FLAGS.apply_augmentation:
+    logger.info("Applying image augmentation.")
+    augmentors = fbresnet_augmentor(isTrain)
+    ds = AugmentImageComponent(ds, augmentors, copy=False)
 
-  #ds = AugmentImageComponent(ds, augmentors, copy=False)
   if isTrain:
       ds = PrefetchDataZMQ(ds, min(20, multiprocessing.cpu_count()))
   ds = BatchData(ds, batch, remainder=not isTrain)
