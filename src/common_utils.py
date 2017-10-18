@@ -1,4 +1,6 @@
 import cv2
+import csv
+import os
 import numpy as np
 import multiprocessing
 import tensorflow as tf
@@ -8,14 +10,17 @@ import tqdm
 from google.apputils import app
 import gflags
 
-from tensorpack import imgaug, dataset, ModelDesc, InputDesc
+from tensorpack import imgaug, dataset, ModelDesc, InputDesc, logger
 from tensorpack.dataflow import (
     AugmentImageComponent, PrefetchDataZMQ, BatchData)
-from tensorpack.predict import PredictConfig, SimpleDatasetPredictor
+from tensorpack.predict import PredictConfig, SimpleDatasetPredictor, OfflinePredictor
 from tensorpack.utils.stats import RatioCounter
 from tensorpack.models import regularize_cost
 from tensorpack.tfutils.summary import add_moving_summary
+from tensorpack.tfutils import argscope, get_model_loader
 from tensorpack.utils.utils import get_tqdm_kwargs
+
+from .cdiscount_data import *
 
 FLAGS = gflags.FLAGS
 
