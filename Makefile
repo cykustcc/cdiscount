@@ -18,7 +18,7 @@ github_lionxv_credential:
 
 tensorflow:
 	@echo -n "initiating tensorflow virtualenv..."
-	./load_tensorflow
+	./load_tensorflow.sh
 	@echo 'done.'
 
 # Use e.g. make ARGS="<file-name>.py" home_upload_src
