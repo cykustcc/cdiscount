@@ -16,6 +16,11 @@ github_lionxv_credential:
 	eval `ssh-agent -s`
 	ssh-add ~/.ssh/id_github_from_cyberstar
 
+tensorflow:
+	@echo -n "initiating tensorflow virtualenv..."
+	./load_tensorflow
+	@echo 'done.'
+
 # Use e.g. make ARGS="<file-name>.py" home_upload_src
 ustc_upload_src:
 	@echo -n 'Copying to server...'
