@@ -33,6 +33,11 @@ ustc_download_src:
 	scp -i $(sshfile_ustc) -r ustc:~/work/$(project)/src/${ARGS}* ./src/${ARGS}
 	@echo ' done.'
 
+ustc_sync_pred:
+	@echo -n 'Downloading from server...'
+	rsync -v -r ustc:~/work/$(project)/data/pred/* ./data/pred/
+	@echo ' done.'
+
 ustc_sync_train_log:
 	@echo -n 'Downloading from server...'
 	rsync -v -r ustc:~/work/$(project)/train_log/* ./train_log/
