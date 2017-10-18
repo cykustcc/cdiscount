@@ -24,7 +24,6 @@ import os
 import multiprocessing
 import socket
 import csv
-import tqdm
 
 from google.apputils import app
 import gflags
@@ -37,16 +36,15 @@ from tensorpack.callbacks import *
 from tensorpack.train import (TrainConfig, SimpleTrainer,
     SyncMultiGPUTrainerParameterServer)
 from tensorpack.predict import OfflinePredictor
-from tensorpack.dataflow import (imgaug, FakeData, PrefetchDataZMQ, BatchData,
-    ThreadedMapData)
+from tensorpack.dataflow import imgaug, FakeData, PrefetchDataZMQ, BatchData
 from tensorpack.tfutils import argscope, get_model_loader
 from tensorpack.utils.gpu import get_nr_gpu
-from tensorpack.utils.utils import get_tqdm_kwargs
 from tensorpack.tfutils.symbolic_functions import *
 from tensorpack.tfutils.summary import *
 
 from .cdiscount_data import *
 from .cdiscount_resnet_utils import *
+from .common_utils import *
 
 FLAGS = gflags.FLAGS
 
@@ -55,19 +53,6 @@ gflags.DEFINE_integer('resnet_depth', 18,
 
 gflags.DEFINE_bool('load_all_imgs_to_memory', False,
                    'Load all training images to memory before training.')
-
-gflags.DEFINE_string('datadir', './data/train_imgs',
-                     'folder to store jpg imgs')
-
-gflags.DEFINE_string('datadir_test', './data/test_imgs',
-                     'folder to store jpg imgs')
-
-gflags.DEFINE_string('img_list_file', './data/train_imgfilelist.txt',
-                     'path of the file store (image, label) list of training'
-                     'set.')
-
-gflags.DEFINE_string('img_list_file_test', './data/test_imgfilelist.txt',
-                     'path of the file store (image, label) list of test set')
 
 gflags.DEFINE_string('load', None,
                      'load model.')
@@ -187,65 +172,23 @@ def get_config(model):
     nr_tower=nr_tower
   )
 
-def make_pred(model, train_or_test_or_val):
-  if train_or_test_or_val == 'test':
-    ds0 = Cdiscount(FLAGS.datadir_test, FLAGS.img_list_file_test, 'test',
-                   shuffle=False)
-  elif train_or_test_or_val == 'train':
-    ds0 = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, 'train',
-                   shuffle=False)
-  ds = BatchData(ds0, PRED_BATCH_SIZE, remainder=True)
-  assert FLAGS.model_path_for_pred!="", "no model_path_for_pred specified!"
-  pred_config = PredictConfig(
-      model=model,
-      session_init=get_model_loader(FLAGS.model_path_for_pred),
-      input_names=['input'],
-      output_names=['output-prob'])
-  pred = OfflinePredictor(pred_config)
-
-  pred_folder = './data/pred/'
-  if not os.path.exists(pred_folder):
-    os.mkdir(pred_folder)
-  steps = FLAGS.model_path_for_pred.strip().split('-')
-  steps = steps[len(steps) - 1]
-  pred_fname = os.path.join(pred_folder,
-      'pred-' + 'cdiscount-resnet-d' + str(FLAGS.resnet_depth) + '-step' +
-      steps + train_or_test_or_val + str(FLAGS.log_dir_name_suffix) + '.txt')
-  with open(pred_fname, 'w') as f:
-    writer = csv.writer(f)
-    logger.info("make prediction for {} dataset:".format(train_or_test_or_val))
-    with tqdm.tqdm(total=ds0.size(), **get_tqdm_kwargs()) as pbar:
-      #MAX_ITER = PRED_BATCH_SIZE
-      iter_cnt = 0
-      for im, _ in ds.get_data():
-        output_prob = pred([im])[0]
-        batched_line_content = []
-        for prob in output_prob:
-          # top 10 categories' psuedo id (0 to 5269) in descending order
-          top_10_pseudo_id = prob.argsort()[-10:][::-1]
-          top_10_prob = prob[top_10_pseudo_id]
-          fname = ds0.imglist[iter_cnt][0]
-          line_content = [fname] + list(top_10_pseudo_id) + list(top_10_prob)
-          batched_line_content.append(line_content)
-          iter_cnt += 1
-        writer.writerows(batched_line_content)
-        pbar.update(PRED_BATCH_SIZE)
-        #if iter_cnt >= MAX_ITER:
-          #break
 
 def main(argv):
   if FLAGS.gpu:
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
   model = Model(FLAGS.resnet_depth)
+  model_name = 'cdiscount-resnet-d' + str(FLAGS.resnet_depth) + str(FLAGS.log_dir_name_suffix)
+
   if FLAGS.pred_train:
-    make_pred(model, 'train')
+    make_pred(model, model_name, 'train', FLAGS.model_path_for_pred,
+        PRED_BATCH_SIZE)
   elif FLAGS.pred_test:
-    make_pred(model, 'test')
+    make_pred(model, model_name, 'test', FLAGS.model_path_for_pred,
+        PRED_BATCH_SIZE)
   else:
     logger.set_logger_dir(
-        os.path.join('train_log', 'cdiscount-resnet-d' + str(FLAGS.resnet_depth)
-          + str(FLAGS.log_dir_name_suffix)))
+        os.path.join('train_log', model_name))
     config = get_config(model)
     if FLAGS.load:
       config.session_init = get_model_loader(FLAGS.load)

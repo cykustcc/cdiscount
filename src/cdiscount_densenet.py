@@ -33,6 +33,7 @@ import socket
 
 from .cdiscount_data import *
 from .cdiscount_resnet_utils import *
+from .common_utils import *
 
 FLAGS = gflags.FLAGS
 
@@ -41,22 +42,6 @@ gflags.DEFINE_integer('densenet_depth', 18,
 
 gflags.DEFINE_integer('densenet_growth_rate', 12,
                       'growth rate of densenet, should be one of [12, 24, 32, 40].')
-
-gflags.DEFINE_bool('load_all_imgs_to_memory', False,
-                   'Load all training images to memory before training.')
-
-gflags.DEFINE_string('datadir', './data/train_imgs',
-                     'folder to store jpg imgs')
-
-gflags.DEFINE_string('datadir_test', './data/test_imgs',
-                     'folder to store jpg imgs')
-
-gflags.DEFINE_string('img_list_file', './data/train_imgfilelist.txt',
-                     'path of the file store (image, label) list of training'
-                     'set.')
-
-gflags.DEFINE_string('img_list_file_test', './data/test_imgfilelist.txt',
-                     'path of the file store (image, label) list of test set')
 
 gflags.DEFINE_string('load', None,
                      'load model.')
@@ -86,6 +71,7 @@ else:
   BATCH_SIZE = 32
 INPUT_SHAPE = 180
 
+
 class Model(ModelDesc):
   def __init__(self, depth, growth_rate):
     super(Model, self).__init__()
@@ -105,6 +91,7 @@ class Model(ModelDesc):
       return Conv2D(name, l, channel, 3, stride=stride,
               nl=tf.identity, use_bias=False,
               W_init=tf.random_normal_initializer(stddev=np.sqrt(2.0/9/channel)))
+
     def add_layer(name, l):
       shape = l.get_shape().as_list()
       in_channel = shape[3]
@@ -125,6 +112,28 @@ class Model(ModelDesc):
         l = AvgPooling('pool', l, 2)
       return l
 
+    def densenet_block(name):
+      with tf.variable_scope(name) as scope:
+
+        for i in range(self.N):
+          l = add_layer('dense_layer.{}'.format(i), l)
+        l = add_transition(name + '-transition', l)
+      return l
+
+    def densenet_backbone(image, num_blocks, block_func):
+      with argscope(Conv2D, nl=tf.identity, use_bias=False,
+                    W_init=variance_scaling_initializer(mode='FAN_OUT')):
+        logits = (LinearWrap(image)
+                  .Conv2D('conv0', 64, 7, stride=2, nl=BNReLU)
+                  .MaxPooling('pool0', shape=3, stride=2, padding='SAME')
+                  .apply(densenet_block, 'group0', block_func, 64, num_blocks[0], 1, first=True)
+                  .apply(densenet_block, 'group1', block_func, 128, num_blocks[1], 2)
+                  .apply(densenet_block, 'group2', block_func, 256, num_blocks[2], 2)
+                  .apply(densenet_block, 'group3', block_func, 512, num_blocks[3], 2)
+                  .BNReLU('bnlast')
+                  .GlobalAvgPooling('gap')
+                  .FullyConnected('linear', 5270, nl=tf.identity)())
+      return logits
 
     def dense_net(name):
       l = conv('conv0', image, 16, 1)
@@ -157,17 +166,16 @@ class Model(ModelDesc):
     add_moving_summary(loss, wd_loss)
     self.cost = tf.add_n([loss, wd_loss], name='cost')
 
-
-def _get_optimizer(self):
-    lr = tf.get_variable('learning_rate', initializer=0.1, trainable=False)
-    tf.summary.scalar('learning_rate', lr)
-    return tf.train.MomentumOptimizer(lr, 0.9, use_nesterov=True)
+  def _get_optimizer(self):
+      lr = tf.get_variable('learning_rate', initializer=0.1, trainable=False)
+      tf.summary.scalar('learning_rate', lr)
+      return tf.train.MomentumOptimizer(lr, 0.9, use_nesterov=True)
 
 
 def get_data(train_or_test, batch):
   isTrain = train_or_test == 'train'
   ds = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, train_or_test,
-                 shuffle=isTrain, large_mem_sys=FLAGS.load_all_imgs_to_memory)
+                 shuffle=isTrain)
   if isTrain:
       ds = PrefetchDataZMQ(ds, min(20, multiprocessing.cpu_count()))
   ds = BatchData(ds, batch, remainder=not isTrain)
@@ -209,60 +217,24 @@ def get_config(model):
   )
 
 
-def make_pred(model, train_or_test_or_val):
-  PRED_BATCH_SIZE = 128
-  if train_or_test_or_val == 'test':
-    ds0 = Cdiscount(FLAGS.datadir_test, FLAGS.img_list_file_test, 'test',
-                   shuffle=False)
-  elif train_or_test_or_val == 'train':
-    ds0 = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, 'train',
-                   shuffle=False)
-  ds = BatchData(ds0, PRED_BATCH_SIZE, remainder=True)
-  assert FLAGS.model_path_for_pred!="", "no model_path_for_pred specified!"
-  pred_config = PredictConfig(
-      model=model,
-      session_init=get_model_loader(FLAGS.model_path_for_pred),
-      input_names=['input'],
-      output_names=['output-prob'])
-  pred = OfflinePredictor(pred_config)
-
-  pred_folder = './data/pred/'
-  if not os.path.exists(pred_folder):
-    os.mkdir(pred_folder)
-  pred_fname = os.path.join(pred_folder,
-      'pred-' + 'cdiscount-densenet-d' + str(FLAGS.densenet_depth) + str(FLAGS.densenet_densenet_growth_rate) +
-      train_or_test_or_val + str(FLAGS.log_dir_name_suffix) + '.txt')
-  with open(pred_fname, 'w') as f:
-    writer = csv.writer(f)
-    with tqdm.tqdm(total=ds.size(), **get_tqdm_kwargs()) as pbar:
-      #MAX_ITER = PRED_BATCH_SIZE
-      iter_cnt = 0
-      for im, _ in ds.get_data():
-        output_prob = pred([im])[0]
-        for prob in output_prob:
-          # top 10 categories' psuedo id (0 to 5269) in descending order
-          top_10_pseudo_id = prob.argsort()[-10:][::-1]
-          top_10_prob = prob[top_10_pseudo_id]
-          fname = ds0.imglist[iter_cnt][0]
-          line_content = [fname] + list(top_10_pseudo_id) + list(top_10_prob)
-          writer.writerow(line_content)
-          iter_cnt += 1
-          pbar.update(1)
-
-
 def main(argv):
   if FLAGS.gpu:
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
   model = Model(FLAGS.densenet_depth, FLAGS.densenet_growth_rate)
+  model_name = ('cdiscount-densenet-d' + str(FLAGS.densenet_depth) + '-gr' +
+        str(FLAGS.densenet_growth_rate) +
+        str(FLAGS.log_dir_name_suffix))
+
   if FLAGS.pred_train:
-    make_pred(model, 'train')
+    make_pred(model, model_name, 'train', FLAGS.model_path_for_pred,
+        PRED_BATCH_SIZE)
   elif FLAGS.pred_test:
-    make_pred(model, 'test')
+    make_pred(model, model_name, 'test', FLAGS.model_path_for_pred,
+        PRED_BATCH_SIZE)
   else:
     logger.set_logger_dir(
-        os.path.join('train_log', 'cdiscount-densenet-d' + str(FLAGS.densenet_depth)
-          + str(FLAGS.log_dir_name_suffix)))
+        os.path.join('train_log', model_name))
     config = get_config(model)
     if FLAGS.load:
       config.session_init = get_model_loader(FLAGS.load)
