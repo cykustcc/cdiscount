@@ -6,6 +6,7 @@ import multiprocessing
 import tensorflow as tf
 from abc import abstractmethod
 import tqdm
+import datetime as dt
 
 from google.apputils import app
 import gflags
@@ -43,7 +44,7 @@ class GoogleNetResize(imgaug.ImageAugmentor):
   crop 36%~100% of the original image
   See `Going Deeper with Convolutions` by Google.
   """
-  def __init__(self, crop_area_fraction=0.36,
+  def __init__(self, crop_area_fraction=0.64,
                aspect_ratio_low=0.75, aspect_ratio_high=1.333):
     self._init(locals())
 
@@ -95,6 +96,10 @@ def fbresnet_augmentor(isTrain):
     augmentors = []
   return augmentors
 
+def test_augmentor():
+  return [GoogleNetResize(),
+      imgaug.Flip(horiz=True),
+      ]
 
 def image_preprocess(image, bgr=True):
   with tf.name_scope('image_preprocess'):
@@ -136,7 +141,7 @@ def compute_loss_and_error(logits, label):
 
 
 def make_pred(model, model_name, train_or_test_or_val, model_path_for_pred,
-    pred_batch_size):
+    pred_batch_size, apply_aug=False):
   """Make per image prediction (top 10 categories and their probabilities) based
     on a trained nueral net model.
   """
@@ -146,7 +151,12 @@ def make_pred(model, model_name, train_or_test_or_val, model_path_for_pred,
   elif train_or_test_or_val == 'train':
     ds0 = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, 'train',
                    shuffle=False)
-  ds = BatchData(ds0, pred_batch_size, remainder=True)
+  ds = ds0
+  if apply_aug:
+    logger.info("Use augmented img for test prediction:")
+    augmentors = test_augmentor()
+    ds = AugmentImageComponent(ds, augmentors, copy=False)
+  ds = BatchData(ds, pred_batch_size, remainder=True)
   assert model_path_for_pred!="", "no model_path_for_pred specified!"
   pred_config = PredictConfig(
       model=model,
@@ -163,10 +173,14 @@ def make_pred(model, model_name, train_or_test_or_val, model_path_for_pred,
   pred_fname = os.path.join(pred_folder,
         'pred-' + model_name + '-step' +
         steps + train_or_test_or_val + str(FLAGS.log_dir_name_suffix) + '.txt')
+  if apply_aug and os.path.exists(pred_fname):
+    pred_fname = pred_fname.replace(".txt", "-{}.txt".format(
+        dt.datetime.now().strftime('%Y%m%d%H%M%S')))
 
   with open(pred_fname, 'w') as f:
     writer = csv.writer(f)
-    logger.info("make prediction for {} dataset:".format(train_or_test_or_val))
+    logger.info("make prediction for {} dataset, stored to {}:".format(
+        train_or_test_or_val, pred_fname))
     with tqdm.tqdm(total=ds0.size(), **get_tqdm_kwargs()) as pbar:
       #MAX_ITER = pred_batch_size
       iter_cnt = 0

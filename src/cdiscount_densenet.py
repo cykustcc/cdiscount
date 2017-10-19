@@ -57,6 +57,9 @@ gflags.DEFINE_bool('pred_test', False,
                    'If true, run prediction on test set without training.'
                    '(using existed model.)')
 
+gflags.DEFINE_bool('apply_augmentation', False,
+                   'If true, Apply image augmentation. For training and'
+                   'testing, we apply different augmentation')
 
 gflags.DEFINE_string('model_path_for_pred', "",
                      'model path for prediction on test set.')
@@ -228,10 +231,10 @@ def main(argv):
 
   if FLAGS.pred_train:
     make_pred(model, model_name, 'train', FLAGS.model_path_for_pred,
-        PRED_BATCH_SIZE)
+        PRED_BATCH_SIZE, FLAGS.apply_augmentation)
   elif FLAGS.pred_test:
     make_pred(model, model_name, 'test', FLAGS.model_path_for_pred,
-        PRED_BATCH_SIZE)
+        PRED_BATCH_SIZE, FLAGS.apply_augmentation)
   else:
     logger.set_logger_dir(
         os.path.join('train_log', model_name))

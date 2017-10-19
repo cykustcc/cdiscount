@@ -9,6 +9,9 @@ Example usage:
   python -m src.cdiscount_prod_prediction \
 --nn_pred_file=data/pred/<filename>.txt \
 --pos_decay_base=1.1
+
+python -m src.cdiscount_prod_prediction \
+--nn_pred_file="./data/pred/pred-cdiscount-resnet-d50-step180000test-*.txt"
 """
 from google.apputils import app
 import gflags
@@ -16,6 +19,7 @@ import csv
 import os
 import tqdm
 import pickle
+import glob
 
 from tensorpack.utils.utils import get_tqdm_kwargs
 from tensorpack import logger
@@ -25,7 +29,7 @@ FLAGS=gflags.FLAGS
 gflags.DEFINE_string('nn_pred_file', "",
                      'Neural Net outputed top 10 per image prediction file.')
 
-gflags.DEFINE_float('pos_decay_base', 1.1,
+gflags.DEFINE_float('pos_decay_base', 1.0,
                     'position decay base.')
 
 
@@ -59,9 +63,11 @@ class PerProdInfo():
     self.probs.append(probs)
     self.num_of_imgs += 1
 
-  def pred_category(self, inv_mapping, pos_decay_base=1.1):
-    """After all associated images' prediction is added, make prediction about
-    this product.
+  def aggregated_id_prob(self, pos_decay_base):
+    """
+    Return:
+      A dictionary of {pseudo_id: prob} aggregated from all associated imgs'
+      top 10 prediction.
     """
     all_pseudo_ids = [item for sublist in self.pseudo_ids for item in sublist]
     all_pseudo_ids = list(set(all_pseudo_ids))
@@ -69,6 +75,13 @@ class PerProdInfo():
     for id_sub_list, prob_sub_list in zip(self.pseudo_ids, self.probs):
       for k, (pseudo_id, prob) in enumerate(zip(id_sub_list, prob_sub_list)):
         aggregated_prob[pseudo_id] += pos_decay_base ** (-k) * prob
+    return aggregated_prob
+
+  def pred_category(self, inv_mapping, pos_decay_base=1.1):
+    """After all associated images' prediction is added, make prediction about
+    this product.
+    """
+    aggregated_prob = self.aggregated_id_prob(pos_decay_base)
     aggregated_prob = sorted(aggregated_prob.iteritems(), key=lambda (k,v):
         (v,k), reverse=True)
     return inv_mapping[aggregated_prob[0][0]]
@@ -79,7 +92,7 @@ class ProdPred():
   """
   def __init__(self, top10_per_im_inference_file,
       inv_id_map_file="./data/inv_category_id_mapping.pkl",
-      pos_decay_base=1.1):
+      pos_decay_base=1.0):
     self.fname = top10_per_im_inference_file
     self.num_products = 0
     self.all_products = []
@@ -99,7 +112,8 @@ class ProdPred():
       num_lines = sum(1 for line in f)
       f.seek(0)
       reader = csv.reader(f)
-      logger.info("products info from neural net loaded.")
+      logger.info("loading products info from neural net from {}.".format(
+          top_10_per_im_inference_file))
       with tqdm.tqdm(total=num_lines, **get_tqdm_kwargs()) as pbar:
         for i, row in enumerate(reader):
           fname = row[0]
@@ -121,7 +135,7 @@ class ProdPred():
     """
     pos_decay_str = str(self.pos_decay_base).replace(".", "_")
     prod_pred_filename = self.fname.replace(".txt", "_" + pos_decay_str + "prod.txt")
-    logger.info("predict category for each of {} products...".format(
+    logger.info("predicting for each of {} products...".format(
         self.num_products))
     with open(prod_pred_filename, 'w') as f:
       writer = csv.writer(f)
@@ -134,8 +148,60 @@ class ProdPred():
           pbar.update(1)
 
 
+class ProdPredMulti():
+  """ Class for make per product prediction based on multiple per product
+  predictions from a few per image prediction, where each per image prediction
+  is based on an augmented set of test set."""
+  def __init__(self, top10_per_im_inference_file_patterns,
+      inv_id_map_file="./data/inv_category_id_mapping.pkl",
+      pos_decay_base=1.0):
+    self.fname = top10_per_im_inference_file_patterns.replace("*","")
+    self.per_im_pred_files = glob.glob(top10_per_im_inference_file_patterns)
+    logger.info("loading products info from {} neural net pred...".format(
+        len(self.per_im_pred_files)))
+    self.inv_map = pickle.load(open(inv_id_map_file,'rb'))
+    self.pos_decay_base = pos_decay_base
+    self.prod_preds = [ProdPred(x, inv_id_map_file, self.pos_decay_base) for x in
+        self.per_im_pred_files]
+    self.num_preds = len(self.prod_preds)
+
+  def make_pred(self):
+    """ Make per product prediction based on per-image-multi-croped test set."""
+    pos_decay_str = str(self.pos_decay_base).replace(".", "_")
+    prod_pred_filename = self.fname.replace(".txt", "_" + pos_decay_str +
+        "prod_multicrop.txt")
+    logger.info("predicting for each of {} products based on {}-crops...".format(
+        self.prod_preds[0].num_products, self.num_preds))
+
+    def merge_dict(x, y):
+      return { k: x.get(k, 0) + y.get(k, 0) for k in set(x) | set(y) }
+
+    with open(prod_pred_filename, 'w') as f:
+      writer = csv.writer(f)
+      writer.writerow(['_id', 'category_id'])
+      with tqdm.tqdm(total=self.prod_preds[0].num_products,
+                     **get_tqdm_kwargs()) as pbar:
+        for prod_list in zip(*[x.all_products for x in self.prod_preds]):
+          aggregated_id_prob_dict = {} # aggregated id prob for all crops' prediction
+          for prod in prod_list:
+            aggregated_id_prob_dict = merge_dict(aggregated_id_prob_dict,
+                prod.aggregated_id_prob(self.pos_decay_base))
+          aggregated_prob = sorted(aggregated_id_prob_dict.iteritems(),
+                                   key=lambda (k,v): (v,k), reverse=True)
+          pred_category = self.inv_map[aggregated_prob[0][0]]
+          writer.writerow([prod.prod_id, pred_category])
+          pbar.update(1)
+
+
 def main(argv):
-  prod_pred = ProdPred(FLAGS.nn_pred_file, pos_decay_base=FLAGS.pos_decay_base)
+  print FLAGS.nn_pred_file
+  if "*" in FLAGS.nn_pred_file:
+  # multi-crop testing. 10 crop may be a good number
+    prod_pred = ProdPredMulti(FLAGS.nn_pred_file,
+        pos_decay_base=FLAGS.pos_decay_base)
+  else:
+  # single-crop testing.
+    prod_pred = ProdPred(FLAGS.nn_pred_file, pos_decay_base=FLAGS.pos_decay_base)
   prod_pred.make_pred()
 
 if __name__ == "__main__":
