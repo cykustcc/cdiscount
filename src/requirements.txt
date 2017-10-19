@@ -8,3 +8,4 @@ glog
 tqdm
 ipywidgets
 opencv-python
+gpustat
