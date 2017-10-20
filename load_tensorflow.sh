@@ -5,7 +5,9 @@
 if [ "$HOSTNAME" = ESC8000 ]; then
 	echo "source ~/anaconda2/bin/activate tensorflow"
 elif [ "$HOSTNAME" = yukun-mbp ]; then
+	echo "source ~/anaconda2/bin/activate tensorflow"
+elif [ "$HOSTNAME" = yukun-dell ]; then
 	echo "source ~/work/libs/virtualenv/tensorflow/bin/activate"
 elif [ "$HOSTNAME" = wang-imac-01.ist.psu.edu ]; then
-	echo "source ~/work/libs/virtualenv/tensorflow/bin/activate"
+	echo "source ~/tensorflow/bin/activate"
 fi
