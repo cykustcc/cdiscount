@@ -4,7 +4,8 @@
 # Author: Jiawei Chen <jwchen.maria@gmail.com>
 r"""
 File to run densenet model on cdiscount data.
-reference: https://github.com/YixuanLi/densenet-tensorflow/blob/master/cifar10-densenet.py
+references: https://github.com/YixuanLi/densenet-tensorflow/blob/master/cifar10-densenet.py
+           https://github.com/yeephycho/densenet-tensorflow/blob/master/net/densenet.py
 
 Example Usage: (assume you should in ../src)
 python -m src.cdiscount_densenet --gpu=0,1,2,3 --densenet_depth=50
@@ -32,13 +33,13 @@ import gflags
 import socket
 
 from .cdiscount_data import *
-from .cdiscount_resnet_utils import *
+from .cdiscount_densenet_utils import *
 from .common_utils import *
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_integer('densenet_depth', 18,
-                      'depth of densenet, should be one of [18, 34, 50, 101].')
+gflags.DEFINE_integer('densenet_depth', 121,
+                      'depth of densenet, should be one of [121, 169, 201, 264].')
 
 gflags.DEFINE_integer('densenet_growth_rate', 12,
                       'growth rate of densenet, should be one of [12, 24, 32, 40].')
@@ -61,6 +62,12 @@ gflags.DEFINE_bool('apply_augmentation', False,
                    'If true, Apply image augmentation. For training and'
                    'testing, we apply different augmentation')
 
+gflags.DEFINE_bool('BC_mode', True,
+                   'If true, run Densenet-BC with bottleneck and compression transition layers')
+
+gflags.DEFINE_float('compression_rate', 0.5,
+                      'compression_rate in transition layer: 0<theta<=1')
+
 gflags.DEFINE_string('model_path_for_pred', "",
                      'model path for prediction on test set.')
 
@@ -71,15 +78,24 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 if socket.gethostname() == "ESC8000":
   BATCH_SIZE = 512
 else:
-  BATCH_SIZE = 32
+  BATCH_SIZE = 1
 INPUT_SHAPE = 180
+
+DENSENET_CONFIG = {
+  121: [6, 12, 24, 16],
+  169: [6, 12, 32, 32],
+  201: [6, 12, 48, 32],
+  264: [6, 12, 64, 48]
+}
 
 
 class Model(ModelDesc):
-  def __init__(self, depth, growth_rate):
-    super(Model, self).__init__()
-    self.N = int((depth - 4)  / 3)
-    self.growthRate = growth_rate
+  def __init__(self, depth, growth_rate, BC_mode, compression_rate):
+    self.depth = depth    
+    self.growth_rate = growth_rate
+    self.BC_mode = BC_mode
+    self.compression_rate = compression_rate
+    print(self.depth, self.growth_rate, self.BC_mode, self.compression_rate)
 
   def _get_inputs(self):
     return [InputDesc(tf.float16, [None, INPUT_SHAPE, INPUT_SHAPE, 3], 'input'),
@@ -87,83 +103,12 @@ class Model(ModelDesc):
 
   def _build_graph(self, input_vars):
     image, label = input_vars
-    # image = image / 128.0 - 1
     image = image_preprocess(image, bgr=False)
 
-    def conv(name, l, channel, stride):
-      return Conv2D(name, l, channel, 3, stride=stride,
-              nl=tf.identity, use_bias=False,
-              W_init=tf.random_normal_initializer(stddev=np.sqrt(2.0/9/channel)))
+    n_of_blocks = DENSENET_CONFIG[self.depth]
+    with argscope([Conv2D, MaxPooling, GlobalAvgPooling, BatchNorm]):
+      logits = densenet_backbone(image, n_of_blocks, self.growth_rate, self.BC_mode, self.compression_rate)
 
-    def add_layer(name, l):
-      shape = l.get_shape().as_list()
-      in_channel = shape[3]
-      with tf.variable_scope(name) as scope:
-        c = BatchNorm('bn1', l)
-        c = tf.nn.relu(c)
-        c = conv('conv1', c, self.growthRate, 1)
-        l = tf.concat([c, l], 3)
-      return l
-
-    def add_transition(name, l):
-      shape = l.get_shape().as_list()
-      in_channel = shape[3]
-      with tf.variable_scope(name) as scope:
-        l = BatchNorm('bn1', l)
-        l = tf.nn.relu(l)
-        l = Conv2D('conv1', l, in_channel, 1, stride=1, use_bias=False, nl=tf.nn.relu)
-        l = AvgPooling('pool', l, 2)
-      return l
-
-    def densenet_block(name):
-      with tf.variable_scope(name) as scope:
-
-        for i in range(self.N):
-          l = add_layer('dense_layer.{}'.format(i), l)
-        l = add_transition(name + '-transition', l)
-      return l
-
-    def densenet_backbone(image, num_blocks, block_func):
-      with argscope(Conv2D, nl=tf.identity, use_bias=False,
-                    W_init=variance_scaling_initializer(mode='FAN_OUT')):
-        logits = (LinearWrap(image)
-                  .Conv2D('conv0', 64, 7, stride=2, nl=BNReLU)
-                  .MaxPooling('pool0', shape=3, stride=2, padding='SAME')
-                  .apply(densenet_block, 'group0', block_func, 64, num_blocks[0], 1, first=True)
-                  .apply(densenet_block, 'group1', block_func, 128, num_blocks[1], 2)
-                  .apply(densenet_block, 'group2', block_func, 256, num_blocks[2], 2)
-                  .apply(densenet_block, 'group3', block_func, 512, num_blocks[3], 2)
-                  .BNReLU('bnlast')
-                  .GlobalAvgPooling('gap')
-                  .FullyConnected('linear', 5270, nl=tf.identity)())
-      return logits
-
-    def dense_net(name):
-      l = conv('conv0', image, 16, 1)
-      with tf.variable_scope('block1') as scope:
-
-        for i in range(self.N):
-          l = add_layer('dense_layer.{}'.format(i), l)
-        l = add_transition('transition1', l)
-
-      with tf.variable_scope('block2') as scope:
-
-        for i in range(self.N):
-          l = add_layer('dense_layer.{}'.format(i), l)
-        l = add_transition('transition2', l)
-
-      with tf.variable_scope('block3') as scope:
-
-        for i in range(self.N):
-          l = add_layer('dense_layer.{}'.format(i), l)
-      l = BatchNorm('bnlast', l)
-      l = tf.nn.relu(l)
-      l = GlobalAvgPooling('gap', l)
-      logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
-
-      return logits
-
-    logits = dense_net("dense_net")
     loss = compute_loss_and_error(logits, label)
     wd_loss = regularize_cost('.*/W', l2_regularizer(1e-4), name='l2_regularize_loss')
     add_moving_summary(loss, wd_loss)
@@ -224,9 +169,11 @@ def main(argv):
   if FLAGS.gpu:
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
-  model = Model(FLAGS.densenet_depth, FLAGS.densenet_growth_rate)
+  model = Model(FLAGS.densenet_depth, FLAGS.densenet_growth_rate, FLAGS.BC_mode, FLAGS.compression_rate)
   model_name = ('cdiscount-densenet-d' + str(FLAGS.densenet_depth) + '-gr' +
-        str(FLAGS.densenet_growth_rate) +
+        str(FLAGS.densenet_growth_rate) + '-BC' + 
+        str(FLAGS.BC_mode) + '-theta' + 
+        str(FLAGS.compression_rate) + 
         str(FLAGS.log_dir_name_suffix))
 
   if FLAGS.pred_train:
