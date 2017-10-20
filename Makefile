@@ -21,6 +21,9 @@ tensorflow:
 	./load_tensorflow.sh
 	@echo 'done.'
 
+watch_gpu:
+	watch --color -n1.0 gpustat -cp
+
 # Use e.g. make ARGS="<file-name>.py" home_upload_src
 ustc_upload_src:
 	@echo -n 'Copying to server...'
