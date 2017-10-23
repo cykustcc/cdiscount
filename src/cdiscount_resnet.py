@@ -49,7 +49,7 @@ from .common_utils import *
 FLAGS = gflags.FLAGS
 
 gflags.DEFINE_integer('resnet_depth', 18,
-                      'depth of resnet, should be one of [18, 34, 50, 101].')
+                      'depth of resnet, should be one of [18, 34, 50, 101, 152].')
 
 gflags.DEFINE_bool('load_all_imgs_to_memory', False,
                    'Load all training images to memory before training.')
@@ -80,7 +80,8 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 
 
 if socket.gethostname() == "ESC8000":
-  TOTAL_BATCH_SIZE = 1792
+  #TOTAL_BATCH_SIZE = 1792
+  TOTAL_BATCH_SIZE = 1344
   PRED_BATCH_SIZE = 256
 else:
   TOTAL_BATCH_SIZE = 192
@@ -91,7 +92,8 @@ RESNET_CONFIG = {
   18: ([2, 2, 2, 2], resnet_basicblock),
   34: ([3, 4, 6, 3], resnet_basicblock),
   50: ([3, 4, 6, 3], resnet_bottleneck),
-  101: ([3, 4, 23, 3], resnet_bottleneck)
+  101: ([3, 4, 23, 3], resnet_bottleneck),
+  152: ([3, 8, 36, 3], resnet_bottleneck)
 }
 
 
@@ -154,7 +156,7 @@ def get_config(model):
   callbacks=[
     ModelSaver(),
     ScheduledHyperParamSetter('learning_rate',
-                              [(30, 1e-2), (40, 1e-3), (65, 1e-4), (85, 1e-5), (105, 1e-6)]),
+                              [(15, 1e-2), (30, 1e-3), (65, 1e-4), (85, 1e-5), (105, 1e-6)]),
     HumanHyperParamSetter('learning_rate'),
   ]
   if nr_tower == 1:
