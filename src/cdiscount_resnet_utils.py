@@ -66,16 +66,17 @@ def resnet_group(l, name, block_func, features, count, stride, first=False):
     return l
 
 
-def resnet_backbone(image, num_blocks, block_func):
+def resnet_backbone(image, num_blocks, block_func, resnet_width_factor=1):
+  rwf = resnet_width_factor
   with argscope(Conv2D, nl=tf.identity, use_bias=False,
                 W_init=variance_scaling_initializer(mode='FAN_OUT')):
     logits = (LinearWrap(image)
-              .Conv2D('conv0', 64, 7, stride=2, nl=BNReLU)
+              .Conv2D('conv0', 64*rwf, 7, stride=2, nl=BNReLU)
               .MaxPooling('pool0', shape=3, stride=2, padding='SAME')
-              .apply(resnet_group, 'group0', block_func, 64, num_blocks[0], 1, first=True)
-              .apply(resnet_group, 'group1', block_func, 128, num_blocks[1], 2)
-              .apply(resnet_group, 'group2', block_func, 256, num_blocks[2], 2)
-              .apply(resnet_group, 'group3', block_func, 512, num_blocks[3], 2)
+              .apply(resnet_group, 'group0', block_func, 64*rwf, num_blocks[0], 1, first=True)
+              .apply(resnet_group, 'group1', block_func, 128*rwf, num_blocks[1], 2)
+              .apply(resnet_group, 'group2', block_func, 256*rwf, num_blocks[2], 2)
+              .apply(resnet_group, 'group3', block_func, 512*rwf, num_blocks[3], 2)
               .BNReLU('bnlast')
               .GlobalAvgPooling('gap')
               .FullyConnected('linear', 5270, nl=tf.identity)())

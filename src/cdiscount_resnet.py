@@ -51,6 +51,10 @@ FLAGS = gflags.FLAGS
 gflags.DEFINE_integer('resnet_depth', 18,
                       'depth of resnet, should be one of [18, 34, 50, 101, 152].')
 
+gflags.DEFINE_integer('resnet_width_factor', 1,
+                      'width factor of resnet, should be one of [1,2,3,4].'
+                      'See https://arxiv.org/abs/1605.07146')
+
 gflags.DEFINE_bool('load_all_imgs_to_memory', False,
                    'Load all training images to memory before training.')
 
@@ -98,8 +102,9 @@ RESNET_CONFIG = {
 
 
 class Model(ModelDesc):
-  def __init__(self, depth):
+  def __init__(self, depth, width=1):
     self.depth = depth
+    self.width = width
 
   def _get_inputs(self):
     return [InputDesc(tf.float16, [None, INPUT_SHAPE, INPUT_SHAPE, 3], 'input'),
@@ -111,7 +116,7 @@ class Model(ModelDesc):
 
     n_of_blocks, block_func = RESNET_CONFIG[self.depth]
     with argscope([Conv2D, MaxPooling, GlobalAvgPooling, BatchNorm]):
-      logits = resnet_backbone(image, n_of_blocks, block_func)
+      logits = resnet_backbone(image, n_of_blocks, block_func, self.width)
 
     loss = compute_loss_and_error(logits, label)
     wd_loss = regularize_cost('.*/W', l2_regularizer(1e-4), name='l2_regularize_loss')
@@ -180,8 +185,9 @@ def main(argv):
   if FLAGS.gpu:
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
-  model = Model(FLAGS.resnet_depth)
-  model_name = 'cdiscount-resnet-d' + str(FLAGS.resnet_depth) + str(FLAGS.log_dir_name_suffix)
+  model = Model(FLAGS.resnet_depth, FLAGS.resnet_width_factor)
+  model_name = ('cdiscount-resnet-d' + str(FLAGS.resnet_depth)
+      + '-wf' str(FLAGS.width_factor) + str(FLAGS.log_dir_name_suffix))
 
   if FLAGS.pred_train:
     make_pred(model, model_name, 'train', FLAGS.model_path_for_pred,
