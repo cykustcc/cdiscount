@@ -187,7 +187,7 @@ def main(argv):
 
   model = Model(FLAGS.resnet_depth, FLAGS.resnet_width_factor)
   model_name = ('cdiscount-resnet-d' + str(FLAGS.resnet_depth)
-      + '-wf' str(FLAGS.width_factor) + str(FLAGS.log_dir_name_suffix))
+      + '-wf' + str(FLAGS.resnet_width_factor) + str(FLAGS.log_dir_name_suffix))
 
   if FLAGS.pred_train:
     make_pred(model, model_name, 'train', FLAGS.model_path_for_pred,
