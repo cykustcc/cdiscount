@@ -54,6 +54,8 @@ gflags.DEFINE_bool('compute_category_hist_test', False,
                    'compute histogram of per category image cnt for'
                    'prediction of test set')
 
+gflags.DEFINE_bool('compute_sorted_percentage', False,"")
+
 
 def loop_and_see(bson_file, show_img=False):
   """
@@ -267,6 +269,22 @@ def compute_category_hist(img_list_file="./data/train_imgfilelist.txt",
     for k, v in hist.iteritems():
       writer.writerow([k, v])
 
+def hist_to_sorted_percentage(hist_file="./data/train_category_hist.txt",
+    sorted_perc_file="./data/train_category_perc_sorted.txt"):
+  percentages = []
+  with open(hist_file, 'r') as f:
+    for i, line in enumerate(f):
+      category, cnt = line.strip().split(",")
+      category = int(category)
+      perc = 1.0 * int(cnt) / 12371293
+      percentages.append([perc, category])
+      sorted_perc = sorted(percentages, reverse=True)
+  with open(sorted_perc_file, 'w') as f:
+    writer = csv.writer(f)
+    for perc, category in sorted_perc:
+      writer.writerow([category, perc])
+
+
 
 def main(argv):
   if FLAGS.loop_and_see_example:
@@ -296,6 +314,8 @@ def main(argv):
   if FLAGS.compute_category_hist_test:
     compute_category_hist("./data/pred/pred-cdiscount-resnet-d50-step75000test_1_0prod.txt",
         "./data/test_category_hist.txt")
+  if FLAGS.compute_sorted_percentage:
+    hist_to_sorted_percentage()
 
 
 if __name__ == '__main__':
