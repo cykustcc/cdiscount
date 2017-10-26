@@ -55,6 +55,19 @@ def resnet_bottleneck(l, ch_out, stride, preact):
   return l + resnet_shortcut(shortcut, ch_out * 4, stride)
 
 
+def se_resnet_bottleneck(l, ch_out, stride):
+	shortcut = l
+	l = Conv2D('conv1', l, ch_out, 1, nl=BNReLU)
+	l = Conv2D('conv2', l, ch_out, 3, stride=stride, nl=BNReLU)
+	l = Conv2D('conv3', l, ch_out * 4, 1, nl=get_bn(zero_init=True))
+
+	squeeze = GlobalAvgPooling('gap', l)
+	squeeze = FullyConnected('fc1', squeeze, ch_out // 4, nl=tf.nn.relu)
+	squeeze = FullyConnected('fc2', squeeze, ch_out * 4, nl=tf.nn.sigmoid)
+	l = l * tf.reshape(squeeze, [-1, ch_out * 4, 1, 1])
+	return l + resnet_shortcut(shortcut, ch_out * 4, stride, nl=get_bn(zero_init=False))
+
+
 def resnet_group(l, name, block_func, features, count, stride, first=False):
   with tf.variable_scope(name):
     with tf.variable_scope('block0'):

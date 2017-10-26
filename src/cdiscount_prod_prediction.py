@@ -168,8 +168,8 @@ class ProdPredMulti():
   def make_pred(self):
     """ Make per product prediction based on per-image-multi-croped test set."""
     pos_decay_str = str(self.pos_decay_base).replace(".", "_")
-    prod_pred_filename = self.fname.replace(".txt", "_" + pos_decay_str +
-        "prod_multicrop.txt")
+    prod_pred_filename = self.fname.replace("*", "_" + pos_decay_str +
+        "prod_{}crop.txt".format(len(self.per_im_pred_files)))
     logger.info("predicting for each of {} products based on {}-crops...".format(
         self.prod_preds[0].num_products, self.num_preds))
 

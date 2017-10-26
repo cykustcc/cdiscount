@@ -8,6 +8,9 @@ File to run resnet model on cdiscount data.
 Example Usage: (assume you should in ../src)
 python -m src.cdiscount_resnet --gpu=0,1,2,3 --resnet_depth=50
 
+python -m src.cdiscount_resnet --gpu=0,1,2,3 --resnet_depth=50 \
+    --mode=se-resnet --resnet_width_factor=2
+
 python -m src.cdiscount_resnet --gpu=11,12,13 --resnet_depth=101 \
     --apply_augmentation
 
@@ -47,6 +50,9 @@ from .cdiscount_resnet_utils import *
 from .common_utils import *
 
 FLAGS = gflags.FLAGS
+
+gflags.DEFINE_string('mode', None,
+                     'should be one of resnet or se-resnet.')
 
 gflags.DEFINE_integer('resnet_depth', 18,
                       'depth of resnet, should be one of [18, 34, 50, 101, 152].')
@@ -100,11 +106,20 @@ RESNET_CONFIG = {
   152: ([3, 8, 36, 3], resnet_bottleneck)
 }
 
+SE_RESNET_CONFIG = {
+  18: ([2, 2, 2, 2], resnet_basicblock),
+  34: ([3, 4, 6, 3], resnet_basicblock),
+  50: ([3, 4, 6, 3], se_resnet_bottleneck),
+  101: ([3, 4, 23, 3], se_resnet_bottleneck),
+  152: ([3, 8, 36, 3], se_resnet_bottleneck)
+}
+
 
 class Model(ModelDesc):
-  def __init__(self, depth, width=1):
+  def __init__(self, depth, width=1, mode='resnet'):
     self.depth = depth
     self.width = width
+    self.mode = mode
 
   def _get_inputs(self):
     return [InputDesc(tf.float16, [None, INPUT_SHAPE, INPUT_SHAPE, 3], 'input'),
@@ -114,7 +129,10 @@ class Model(ModelDesc):
     image, label = inputs
     image = image_preprocess(image, bgr=False)
 
-    n_of_blocks, block_func = RESNET_CONFIG[self.depth]
+    if self.mode == 'resnet':
+      n_of_blocks, block_func = RESNET_CONFIG[self.depth]
+    elif self.mode == 'se-resnet':
+      n_of_blocks, block_func = SE_RESNET_CONFIG[self.depth]
     with argscope([Conv2D, MaxPooling, GlobalAvgPooling, BatchNorm]):
       logits = resnet_backbone(image, n_of_blocks, block_func, self.width)
 
@@ -185,10 +203,10 @@ def main(argv):
   if FLAGS.gpu:
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
-  model = Model(FLAGS.resnet_depth, FLAGS.resnet_width_factor)
+  model = Model(FLAGS.resnet_depth, FLAGS.resnet_width_factor, FLAGS.mode)
   width_str = ('-wf' + str(FLAGS.resnet_width_factor) if
       FLAGS.resnet_width_factor == 0 else '')
-  model_name = ('cdiscount-resnet-d' + str(FLAGS.resnet_depth)
+  model_name = ('cdiscount-{}-d'.format(FLAGS.mode) + str(FLAGS.resnet_depth)
       + width_str + str(FLAGS.log_dir_name_suffix))
 
   if FLAGS.pred_train:
