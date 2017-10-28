@@ -9,7 +9,7 @@ from tensorflow.contrib.layers import variance_scaling_initializer
 
 
 import tensorpack as tp
-from tensorpack import imgaug
+from tensorpack import imgaug, logger
 from tensorpack.utils.stats import RatioCounter
 from tensorpack.tfutils.argscope import argscope, get_arg_scope
 from tensorpack.tfutils.summary import add_moving_summary
@@ -18,7 +18,7 @@ from tensorpack.dataflow import (
         BatchData)
 from tensorpack.models import (
     Conv2D, MaxPooling, GlobalAvgPooling, BatchNorm, BNReLU,
-    LinearWrap)
+    FullyConnected, LinearWrap)
 from tensorpack.predict import PredictConfig, SimpleDatasetPredictor
 
 
@@ -39,23 +39,31 @@ def apply_preactivation(l, preact):
     shortcut = l
   return l, shortcut
 
+def get_bn(zero_init=False):
+	"""
+	Zero init gamma is good for resnet. See https://arxiv.org/abs/1706.02677.
+	"""
+	if zero_init:
+		return lambda x, name: BatchNorm('bn', x, gamma_init=tf.zeros_initializer())
+	else:
+		return lambda x, name: BatchNorm('bn', x)
 
 def resnet_basicblock(l, ch_out, stride, preact):
   l, shortcut = apply_preactivation(l, preact)
   l = Conv2D('conv1', l, ch_out, 3, stride=stride, nl=BNReLU)
-  l = Conv2D('conv2', l, ch_out, 3)
-  return l + resnet_shortcut(shortcut, ch_out, stride)
+  l = Conv2D('conv2', l, ch_out, 3, nl=get_bn(zero_init=True))
+  return l + resnet_shortcut(shortcut, ch_out, stride, nl=get_bn(zero_init=True))
 
 
 def resnet_bottleneck(l, ch_out, stride, preact):
   l, shortcut = apply_preactivation(l, preact)
   l = Conv2D('conv1', l, ch_out, 1, nl=BNReLU)
   l = Conv2D('conv2', l, ch_out, 3, stride=stride, nl=BNReLU)
-  l = Conv2D('conv3', l, ch_out * 4, 1)
-  return l + resnet_shortcut(shortcut, ch_out * 4, stride)
+  l = Conv2D('conv3', l, ch_out * 4, 1, nl=get_bn(zero_init=True))
+  return l + resnet_shortcut(shortcut, ch_out * 4, stride, nl=get_bn(zero_init=True))
 
 
-def se_resnet_bottleneck(l, ch_out, stride):
+def se_resnet_bottleneck(l, ch_out, stride, dummy):
 	shortcut = l
 	l = Conv2D('conv1', l, ch_out, 1, nl=BNReLU)
 	l = Conv2D('conv2', l, ch_out, 3, stride=stride, nl=BNReLU)
@@ -64,7 +72,8 @@ def se_resnet_bottleneck(l, ch_out, stride):
 	squeeze = GlobalAvgPooling('gap', l)
 	squeeze = FullyConnected('fc1', squeeze, ch_out // 4, nl=tf.nn.relu)
 	squeeze = FullyConnected('fc2', squeeze, ch_out * 4, nl=tf.nn.sigmoid)
-	l = l * tf.reshape(squeeze, [-1, ch_out * 4, 1, 1])
+	squeeze = tf.reshape(squeeze, [-1, 1, 1, ch_out * 4])
+	l = l * squeeze
 	return l + resnet_shortcut(shortcut, ch_out * 4, stride, nl=get_bn(zero_init=False))
 
 

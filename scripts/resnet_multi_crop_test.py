@@ -27,7 +27,7 @@ gflags.DEFINE_bool('apply_augmentation', False,
 gflags.DEFINE_string('model_path_for_pred', "",
 									 'model path for prediction on test set.')
 
-cmd = """tmux {} select-layout even-vertical"""
+cmd = """tmux {} """
 
 
 def run_test():
@@ -47,8 +47,8 @@ def run_test():
       test_command += "--apply_augmentation"
     per_panel_command += (split_w_str +
         '"source ~/anaconda2/bin/activate tensorflow ; '
-        'sleep {} ; echo "{}" ; {} ; read" \; '.format(i,
-             test_command.replace(" ", "\ "), test_command))
+        'sleep {} ; {} ; read" \; select-layout even-vertical \; '.format(i,
+             test_command))
   print cmd.format(per_panel_command)
   os.system(cmd.format(per_panel_command))
 

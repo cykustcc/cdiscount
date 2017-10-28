@@ -44,8 +44,8 @@ class GoogleNetResize(imgaug.ImageAugmentor):
   crop 36%~100% of the original image
   See `Going Deeper with Convolutions` by Google.
   """
-  def __init__(self, crop_area_fraction=0.64,
-               aspect_ratio_low=0.75, aspect_ratio_high=1.333):
+  def __init__(self, crop_area_fraction=0.9,
+               aspect_ratio_low=0.9, aspect_ratio_high=1.1):
     self._init(locals())
 
   def _augment(self, img, _):
@@ -76,20 +76,6 @@ def fbresnet_augmentor(isTrain):
   if isTrain:
     augmentors = [
       GoogleNetResize(),
-      imgaug.RandomOrderAug(
-        [imgaug.BrightnessScale((0.6, 1.4), clip=False),
-         imgaug.Contrast((0.6, 1.4), clip=False),
-         imgaug.Saturation(0.4, rgb=False),
-         # rgb-bgr conversion for the constants copied from fb.resnet.torch
-         imgaug.Lighting(0.1,
-                         eigval=np.asarray(
-                             [0.2175, 0.0188, 0.0045][::-1]) * 255.0,
-                         eigvec=np.array(
-                             [[-0.5675, 0.7192, 0.4009],
-                              [-0.5808, -0.0045, -0.8140],
-                              [-0.5836, -0.6948, 0.4203]],
-                             dtype='float32')[::-1, ::-1]
-                         )]),
       imgaug.Flip(horiz=True),
     ]
   else:
@@ -141,7 +127,7 @@ def compute_loss_and_error(logits, label):
 
 
 def make_pred(model, model_name, train_or_test_or_val, model_path_for_pred,
-    pred_batch_size, apply_aug=False):
+    pred_batch_size, apply_aug=False, gpu=None):
   """Make per image prediction (top 10 categories and their probabilities) based
     on a trained nueral net model.
   """
@@ -170,12 +156,13 @@ def make_pred(model, model_name, train_or_test_or_val, model_path_for_pred,
     os.mkdir(pred_folder)
   steps = model_path_for_pred.strip().split('-')
   steps = steps[len(steps) - 1]
+  suffix = str(FLAGS.log_dir_name_suffix)
   pred_fname = os.path.join(pred_folder,
         'pred-' + model_name + '-step' +
-        steps + train_or_test_or_val + str(FLAGS.log_dir_name_suffix) + '.txt')
+        steps + train_or_test_or_val + suffix + '.txt')
   if apply_aug and os.path.exists(pred_fname):
-    pred_fname = pred_fname.replace(".txt", "-{}.txt".format(
-        dt.datetime.now().strftime('%Y%m%d%H%M%S')))
+    pred_fname = pred_fname.replace(".txt", "-{}-gpu{}.txt".format(
+        dt.datetime.now().strftime('%Y%m%d%H%M%S'), gpu))
 
   with open(pred_fname, 'w') as f:
     writer = csv.writer(f)

@@ -51,7 +51,7 @@ from .common_utils import *
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string('mode', None,
+gflags.DEFINE_string('mode', 'resnet',
                      'should be one of resnet or se-resnet.')
 
 gflags.DEFINE_integer('resnet_depth', 18,
@@ -90,29 +90,25 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 
 
 if socket.gethostname() == "ESC8000":
+  # For resnet d50 14 gpu
   #TOTAL_BATCH_SIZE = 1792
-  TOTAL_BATCH_SIZE = 1344
-  PRED_BATCH_SIZE = 256
+  # For se-resnet d50 wf2 14 gpu
+  TOTAL_BATCH_SIZE = 588
+  # For resnet d101 14 gpu
+  #TOTAL_BATCH_SIZE = 1344
+  PRED_BATCH_SIZE = 300
 else:
   TOTAL_BATCH_SIZE = 192
   PRED_BATCH_SIZE = 192
 INPUT_SHAPE = 180
 
-RESNET_CONFIG = {
-  18: ([2, 2, 2, 2], resnet_basicblock),
-  34: ([3, 4, 6, 3], resnet_basicblock),
-  50: ([3, 4, 6, 3], resnet_bottleneck),
-  101: ([3, 4, 23, 3], resnet_bottleneck),
-  152: ([3, 8, 36, 3], resnet_bottleneck)
+LEARNING_RATE={
+  'cdiscount-resnet-d101' : [(15, 1e-2), (30, 1e-3), (42, 1e-4), (65, 1e-5),
+    (105, 1e-6)],
+  'cdiscount-se-resnet-d50-wf2' : [(45, 1e-2), (80, 1e-3), (120, 1e-4), (180,
+    1e-5), (240, 1e-6)],
 }
 
-SE_RESNET_CONFIG = {
-  18: ([2, 2, 2, 2], resnet_basicblock),
-  34: ([3, 4, 6, 3], resnet_basicblock),
-  50: ([3, 4, 6, 3], se_resnet_bottleneck),
-  101: ([3, 4, 23, 3], se_resnet_bottleneck),
-  152: ([3, 8, 36, 3], se_resnet_bottleneck)
-}
 
 
 class Model(ModelDesc):
@@ -129,10 +125,17 @@ class Model(ModelDesc):
     image, label = inputs
     image = image_preprocess(image, bgr=False)
 
-    if self.mode == 'resnet':
-      n_of_blocks, block_func = RESNET_CONFIG[self.depth]
-    elif self.mode == 'se-resnet':
-      n_of_blocks, block_func = SE_RESNET_CONFIG[self.depth]
+    bottleneck = {
+        'resnet': resnet_bottleneck,
+        'se-resnet': se_resnet_bottleneck}[self.mode]
+    RESNET_CONFIG = {
+      18: ([2, 2, 2, 2], resnet_basicblock),
+      34: ([3, 4, 6, 3], resnet_basicblock),
+      50: ([3, 4, 6, 3], bottleneck),
+      101: ([3, 4, 23, 3], bottleneck),
+      152: ([3, 8, 36, 3], bottleneck)
+    }
+    n_of_blocks, block_func = RESNET_CONFIG[self.depth]
     with argscope([Conv2D, MaxPooling, GlobalAvgPooling, BatchNorm]):
       logits = resnet_backbone(image, n_of_blocks, block_func, self.width)
 
@@ -166,7 +169,7 @@ def get_data(train_or_test, batch):
   return ds
 
 
-def get_config(model):
+def get_config(model, model_name):
   nr_tower = max(get_nr_gpu(), 1)
   batch = TOTAL_BATCH_SIZE // nr_tower
   logger.info("Running on {} towers. Batch size per tower:{}".format(nr_tower,
@@ -176,10 +179,15 @@ def get_config(model):
   dataset_val = get_data('val', batch)
   infs = [ClassificationError('wrong-top1', 'val-error-top1'),
           ClassificationError('wrong-top5', 'val-error-top5')]
+  if model_name in LEARNING_RATE.keys():
+    learning_rate_schedule = LEARNING_RATE[model_name]
+  else:
+    learning_rate_schedule = [(15, 1e-2), (30, 1e-3), (42, 1e-4), (65, 1e-5), (105, 1e-6)]
+  logger.info("learning rate schedule: {}".format(learning_rate_schedule))
   callbacks=[
     ModelSaver(),
     ScheduledHyperParamSetter('learning_rate',
-                              [(15, 1e-2), (30, 1e-3), (65, 1e-4), (85, 1e-5), (105, 1e-6)]),
+                              learning_rate_schedule),
     HumanHyperParamSetter('learning_rate'),
   ]
   if nr_tower == 1:
@@ -205,20 +213,20 @@ def main(argv):
 
   model = Model(FLAGS.resnet_depth, FLAGS.resnet_width_factor, FLAGS.mode)
   width_str = ('-wf' + str(FLAGS.resnet_width_factor) if
-      FLAGS.resnet_width_factor == 0 else '')
+      FLAGS.resnet_width_factor > 1 else '')
   model_name = ('cdiscount-{}-d'.format(FLAGS.mode) + str(FLAGS.resnet_depth)
       + width_str + str(FLAGS.log_dir_name_suffix))
 
   if FLAGS.pred_train:
     make_pred(model, model_name, 'train', FLAGS.model_path_for_pred,
-        PRED_BATCH_SIZE, FLAGS.apply_augmentation)
+        PRED_BATCH_SIZE, FLAGS.apply_augmentation, FLAGS.gpu)
   elif FLAGS.pred_test:
     make_pred(model, model_name, 'test', FLAGS.model_path_for_pred,
-        PRED_BATCH_SIZE, FLAGS.apply_augmentation)
+        PRED_BATCH_SIZE, FLAGS.apply_augmentation, FLAGS.gpu)
   else:
     logger.set_logger_dir(
         os.path.join('train_log', model_name))
-    config = get_config(model)
+    config = get_config(model, model_name)
     if FLAGS.load:
       config.session_init = get_model_loader(FLAGS.load)
     SyncMultiGPUTrainerParameterServer(config).train()
