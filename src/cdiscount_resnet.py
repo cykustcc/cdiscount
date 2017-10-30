@@ -90,15 +90,18 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 
 
 if socket.gethostname() == "ESC8000":
-  # For resnet d50 14 gpu
-  #TOTAL_BATCH_SIZE = 1792
-  # For se-resnet d50 wf2 14 gpu
-  TOTAL_BATCH_SIZE = 588
-  # For resnet d101 14 gpu
-  #TOTAL_BATCH_SIZE = 1344
+  BATCH_SIZE={
+    'cdiscount-resnet-d50' : 128, #1792
+    'cdiscount-resnet-d101' : 96, #1344
+    'cdiscount-se-resnet-d50-wf2' : 42, #672
+  }
   PRED_BATCH_SIZE = 300
-else:
-  TOTAL_BATCH_SIZE = 192
+else: #home, 8GB gpu memory.
+  BATCH_SIZE={
+    'cdiscount-resnet-d50' : 128, #1792
+    'cdiscount-resnet-d101' : 96, #1344
+    'cdiscount-se-resnet-d50-wf2' : 42, #672
+  }
   PRED_BATCH_SIZE = 192
 INPUT_SHAPE = 180
 
@@ -171,7 +174,8 @@ def get_data(train_or_test, batch):
 
 def get_config(model, model_name):
   nr_tower = max(get_nr_gpu(), 1)
-  batch = TOTAL_BATCH_SIZE // nr_tower
+  #batch = TOTAL_BATCH_SIZE // nr_tower
+  batch = BATCH_SIZE[model_name]
   logger.info("Running on {} towers. Batch size per tower:{}".format(nr_tower,
                                                                      batch))
 
