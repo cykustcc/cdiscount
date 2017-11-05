@@ -32,6 +32,10 @@ gflags.DEFINE_string('nn_pred_file', "",
 gflags.DEFINE_float('pos_decay_base', 1.0,
                     'position decay base.')
 
+gflags.DEFINE_bool('store_agg_top10', False,
+                   'If true, store per product aggregated top 10'
+                   'probabilities prediction')
+
 
 class PerProdInfo():
   """ Per product prediction info given by neural net per image info.
@@ -154,7 +158,7 @@ class ProdPredMulti():
   is based on an augmented set of test set."""
   def __init__(self, top10_per_im_inference_file_patterns,
       inv_id_map_file="./data/inv_category_id_mapping.pkl",
-      pos_decay_base=1.0):
+      pos_decay_base=1.0, store_agg_top10=False):
     self.fname = top10_per_im_inference_file_patterns.replace("*","")
     self.per_im_pred_files = glob.glob(top10_per_im_inference_file_patterns)
     logger.info("loading products info from {} neural net pred...".format(
@@ -164,12 +168,14 @@ class ProdPredMulti():
     self.prod_preds = [ProdPred(x, inv_id_map_file, self.pos_decay_base) for x in
         self.per_im_pred_files]
     self.num_preds = len(self.prod_preds)
+    self.store_agg_top10=store_agg_top10
 
   def make_pred(self):
     """ Make per product prediction based on per-image-multi-croped test set."""
     pos_decay_str = str(self.pos_decay_base).replace(".", "_")
-    prod_pred_filename = self.fname.replace("*", "_" + pos_decay_str +
+    prod_pred_filename = (self.fname +  "_" + pos_decay_str +
         "prod_{}crop.txt".format(len(self.per_im_pred_files)))
+    agg_top_ten_filename = prod_pred_filename.replace("crop", "crop_agg")
     logger.info("predicting for each of {} products based on {}-crops...".format(
         self.prod_preds[0].num_products, self.num_preds))
 
@@ -177,6 +183,9 @@ class ProdPredMulti():
       return { k: x.get(k, 0) + y.get(k, 0) for k in set(x) | set(y) }
 
     with open(prod_pred_filename, 'w') as f:
+      if self.store_agg_top10:
+        f_agg = open(agg_top_ten_filename, 'w')
+        f_agg_writer = csv.writer(f_agg)
       writer = csv.writer(f)
       writer.writerow(['_id', 'category_id'])
       with tqdm.tqdm(total=self.prod_preds[0].num_products,
@@ -188,9 +197,16 @@ class ProdPredMulti():
                 prod.aggregated_id_prob(self.pos_decay_base))
           aggregated_prob = sorted(aggregated_id_prob_dict.iteritems(),
                                    key=lambda (k,v): (v,k), reverse=True)
+          #only top 10 in aggregated_prob are stored as aggregated top 10.
+          if self.store_agg_top10:
+            tmp = zip(*aggregated_prob[0:10])
+            line = [prod.prod_id] + list(tmp[0]) + list(tmp[1])
+            f_agg_writer.writerow(line)
           pred_category = self.inv_map[aggregated_prob[0][0]]
           writer.writerow([prod.prod_id, pred_category])
           pbar.update(1)
+      if self.store_agg_top10:
+        f_agg.close()
 
 
 def main(argv):
@@ -198,7 +214,8 @@ def main(argv):
   if "*" in FLAGS.nn_pred_file:
   # multi-crop testing. 10 crop may be a good number
     prod_pred = ProdPredMulti(FLAGS.nn_pred_file,
-        pos_decay_base=FLAGS.pos_decay_base)
+        pos_decay_base=FLAGS.pos_decay_base,
+        store_agg_top10=FLAGS.store_agg_top10)
   else:
   # single-crop testing.
     prod_pred = ProdPred(FLAGS.nn_pred_file, pos_decay_base=FLAGS.pos_decay_base)
