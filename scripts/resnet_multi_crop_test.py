@@ -14,8 +14,15 @@ import gflags
 
 FLAGS = gflags.FLAGS
 
+gflags.DEFINE_string('mode', 'resnet',
+                     'should be one of resnet or se-resnet.')
+
 gflags.DEFINE_integer('resnet_depth', 18,
 										'depth of resnet, should be one of [18, 34, 50, 101, 152].')
+
+gflags.DEFINE_integer('resnet_width_factor', 1,
+                      'width factor of resnet, should be one of [1,2,3,4].'
+                      'See https://arxiv.org/abs/1605.07146')
 
 gflags.DEFINE_string('gpu', None,
                      'specify which gpu(s) to be used.')
@@ -44,10 +51,16 @@ def run_test():
         "--model_path_for_pred={} "
         "--gpu={} ".format(FLAGS.resnet_depth, FLAGS.model_path_for_pred, gpu))
     if FLAGS.apply_augmentation:
-      test_command += "--apply_augmentation"
+      test_command += "--apply_augmentation "
+    if FLAGS.mode != "resnet":
+      test_command += "--mode={} ".format(FLAGS.mode)
+    if FLAGS.resnet_width_factor != 1:
+      test_command += (
+          "--resnet_width_factor={}".format(FLAGS.resnet_width_factor))
+
     per_panel_command += (split_w_str +
         '"source ~/anaconda2/bin/activate tensorflow ; '
-        'sleep {} ; {} ; read" \; select-layout even-vertical \; '.format(i,
+        'sleep {} ; {} ; read" \; select-layout even-vertical \; '.format(i*10,
              test_command))
   print cmd.format(per_panel_command)
   os.system(cmd.format(per_panel_command))

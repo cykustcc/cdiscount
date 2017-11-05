@@ -108,8 +108,8 @@ INPUT_SHAPE = 180
 LEARNING_RATE={
   'cdiscount-resnet-d101' : [(15, 1e-2), (30, 1e-3), (42, 1e-4), (65, 1e-5),
     (105, 1e-6)],
-  'cdiscount-se-resnet-d50-wf2' : [(45, 1e-2), (80, 1e-3), (120, 1e-4), (180,
-    1e-5), (240, 1e-6)],
+  'cdiscount-se-resnet-d50-wf2' : [(25, 1e-2), (40, 1e-3), (50, 1e-4), (60,
+    1e-5), (70, 1e-6)],
 }
 
 
