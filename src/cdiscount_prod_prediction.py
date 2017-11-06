@@ -81,7 +81,7 @@ class PerProdInfo():
         aggregated_prob[pseudo_id] += pos_decay_base ** (-k) * prob
     return aggregated_prob
 
-  def pred_category(self, inv_mapping, pos_decay_base=1.1):
+  def pred_category(self, inv_mapping, pos_decay_base=1.0):
     """After all associated images' prediction is added, make prediction about
     this product.
     """
@@ -200,7 +200,8 @@ class ProdPredMulti():
           #only top 10 in aggregated_prob are stored as aggregated top 10.
           if self.store_agg_top10:
             tmp = zip(*aggregated_prob[0:10])
-            line = [prod.prod_id] + list(tmp[0]) + list(tmp[1])
+            line = [prod.prod_id] + list(tmp[0]) + [1.0 * x /
+                len(self.per_im_pred_files) for x in tmp[1]]
             f_agg_writer.writerow(line)
           pred_category = self.inv_map[aggregated_prob[0][0]]
           writer.writerow([prod.prod_id, pred_category])
