@@ -94,6 +94,7 @@ if socket.gethostname() == "ESC8000":
     'cdiscount-resnet-d50' : 128, #1792
     'cdiscount-resnet-d101' : 96, #1344
     'cdiscount-se-resnet-d50-wf2' : 42, #672
+    'cdiscount-se-resnet-d101-wf2' : 32, #512
   }
   PRED_BATCH_SIZE = 300
 else: #home, 8GB gpu memory.
@@ -101,6 +102,7 @@ else: #home, 8GB gpu memory.
     'cdiscount-resnet-d50' : 128, #1792
     'cdiscount-resnet-d101' : 96, #1344
     'cdiscount-se-resnet-d50-wf2' : 42, #672
+    'cdiscount-se-resnet-d101-wf2' : 32, #512
   }
   PRED_BATCH_SIZE = 192
 INPUT_SHAPE = 180
@@ -109,6 +111,8 @@ LEARNING_RATE={
   'cdiscount-resnet-d101' : [(15, 1e-2), (30, 1e-3), (42, 1e-4), (65, 1e-5),
     (105, 1e-6)],
   'cdiscount-se-resnet-d50-wf2' : [(25, 1e-2), (40, 1e-3), (50, 1e-4), (60,
+    1e-5), (70, 1e-6)],
+  'cdiscount-se-resnet-d101-wf2' : [(25, 1e-2), (40, 1e-3), (50, 1e-4), (60,
     1e-5), (70, 1e-6)],
 }
 
