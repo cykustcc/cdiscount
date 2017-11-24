@@ -76,9 +76,16 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 
 # BATCH_SIZE = 64
 if socket.gethostname() == "ESC8000":
-  BATCH_SIZE = 512
+  BATCH_SIZE={
+    'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : 384, #1792
+  }
+  PRED_BATCH_SIZE=300
 else:
-  BATCH_SIZE = 1
+  BATCH_SIZE={
+    'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : 128, #1792
+  }
+  PRED_BATCH_SIZE=300
+
 INPUT_SHAPE = 180
 
 DENSENET_CONFIG = {
@@ -88,10 +95,14 @@ DENSENET_CONFIG = {
   264: [6, 12, 64, 48]
 }
 
+LEARNING_RATE={
+  'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : [(30, 1e-2), (60, 1e-3), (85, 1e-4),
+      (95, 1e-5), (105, 1e-6)]
+}
 
 class Model(ModelDesc):
   def __init__(self, depth, growth_rate, BC_mode, compression_rate):
-    self.depth = depth    
+    self.depth = depth
     self.growth_rate = growth_rate
     self.BC_mode = BC_mode
     self.compression_rate = compression_rate
@@ -130,9 +141,9 @@ def get_data(train_or_test, batch):
   return ds
 
 
-def get_config(model):
+def get_config(model, model_name):
   nr_tower = max(get_nr_gpu(), 1)
-  batch = BATCH_SIZE // nr_tower
+  batch = BATCH_SIZE[model_name]
   logger.info("Running on {} towers. Batch size per tower:{}".format(nr_tower,
                                                                      batch))
   # prepare dataset
@@ -141,10 +152,15 @@ def get_config(model):
   infs = [ClassificationError('wrong-top1', 'val-error-top1'),
           ClassificationError('wrong-top5', 'val-error-top5')]
   steps_per_epoch = dataset_train.size() // 3
+  if model_name in LEARNING_RATE.keys():
+    learning_rate_schedule = LEARNING_RATE[model_name]
+  else:
+    learning_rate_schedule = [(30, 1e-2), (60, 1e-3), (85, 1e-4),
+       (95, 1e-5), (105, 1e-6)]
   callbacks=[
     ModelSaver(),
     ScheduledHyperParamSetter('learning_rate',
-                              [(30, 1e-2), (60, 1e-3), (85, 1e-4), (95, 1e-5), (105, 1e-6)]),
+                              learning_rate_schedule),
     HumanHyperParamSetter('learning_rate'),
   ]
   if nr_tower == 1:
@@ -171,9 +187,9 @@ def main(argv):
 
   model = Model(FLAGS.densenet_depth, FLAGS.densenet_growth_rate, FLAGS.BC_mode, FLAGS.compression_rate)
   model_name = ('cdiscount-densenet-d' + str(FLAGS.densenet_depth) + '-gr' +
-        str(FLAGS.densenet_growth_rate) + '-BC' + 
-        str(FLAGS.BC_mode) + '-theta' + 
-        str(FLAGS.compression_rate) + 
+        str(FLAGS.densenet_growth_rate) + '-BC' +
+        str(FLAGS.BC_mode) + '-theta' +
+        str(FLAGS.compression_rate) +
         str(FLAGS.log_dir_name_suffix))
 
   if FLAGS.pred_train:
@@ -185,7 +201,7 @@ def main(argv):
   else:
     logger.set_logger_dir(
         os.path.join('train_log', model_name))
-    config = get_config(model)
+    config = get_config(model, model_name)
     if FLAGS.load:
       config.session_init = get_model_loader(FLAGS.load)
     SyncMultiGPUTrainerParameterServer(config).train()
