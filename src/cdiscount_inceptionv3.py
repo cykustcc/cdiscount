@@ -62,7 +62,7 @@ else: #home, 8GB gpu memory.
 INPUT_SHAPE = 180
 
 LEARNING_RATE={
-  'cdiscount-inceptionv3' : [(5, 0.03), (9, 0.01), (12, 0.006),
+  'cdiscount-inceptionv3' : [(5, 0.01), (9, 0.08), (12, 0.006),
 														 (17, 0.003), (22, 1e-3), (36, 2e-4),
 														 (41, 8e-5), (48, 1e-5), (53, 2e-6)],
 }
@@ -177,7 +177,7 @@ class Model(ModelDesc):
         br1 = Conv2D('conv11', br1, 128, 1)
         shape = br1.get_shape().as_list()
         br1 = Conv2D('convout', br1, 768, shape[1:3], padding='VALID')
-        br1 = FullyConnected('fc', br1, 1000, nl=tf.identity)
+        br1 = FullyConnected('fc', br1, 5270, nl=tf.identity)
 
       with tf.variable_scope('incep-17-1280a'):
         l = tf.concat([
