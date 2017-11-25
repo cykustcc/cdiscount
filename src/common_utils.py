@@ -38,6 +38,8 @@ gflags.DEFINE_string('img_list_file', './data/train_imgfilelist.txt',
 gflags.DEFINE_string('img_list_file_test', './data/test_imgfilelist.txt',
                      'path of the file store (image, label) list of test set')
 
+gflags.DEFINE_bool('load_all_imgs_to_memory', False,
+                   'Load all training images to memory before training.')
 
 class GoogleNetResize(imgaug.ImageAugmentor):
   """
@@ -186,3 +188,22 @@ def make_pred(model, model_name, train_or_test_or_val, model_path_for_pred,
         pbar.update(pred_batch_size)
         #if iter_cnt >= MAX_ITER:
           #break
+
+def get_data(train_or_test, batch):
+  """
+  Args:
+    train_or_test: should be one of {'train', 'test', 'val'}
+  """
+  isTrain = train_or_test == 'train'
+
+  ds = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, train_or_test,
+                 shuffle=isTrain, large_mem_sys=FLAGS.load_all_imgs_to_memory)
+  if FLAGS.apply_augmentation:
+    logger.info("Applying image augmentation.")
+    augmentors = fbresnet_augmentor(isTrain)
+    ds = AugmentImageComponent(ds, augmentors, copy=False)
+
+  if isTrain:
+      ds = PrefetchDataZMQ(ds, min(20, multiprocessing.cpu_count()))
+  ds = BatchData(ds, batch, remainder=not isTrain)
+  return ds

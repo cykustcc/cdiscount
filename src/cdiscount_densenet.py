@@ -131,16 +131,6 @@ class Model(ModelDesc):
       return tf.train.MomentumOptimizer(lr, 0.9, use_nesterov=True)
 
 
-def get_data(train_or_test, batch):
-  isTrain = train_or_test == 'train'
-  ds = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, train_or_test,
-                 shuffle=isTrain)
-  if isTrain:
-      ds = PrefetchDataZMQ(ds, min(20, multiprocessing.cpu_count()))
-  ds = BatchData(ds, batch, remainder=not isTrain)
-  return ds
-
-
 def get_config(model, model_name):
   nr_tower = max(get_nr_gpu(), 1)
   batch = BATCH_SIZE[model_name]

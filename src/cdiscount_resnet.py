@@ -61,9 +61,6 @@ gflags.DEFINE_integer('resnet_width_factor', 1,
                       'width factor of resnet, should be one of [1,2,3,4].'
                       'See https://arxiv.org/abs/1605.07146')
 
-gflags.DEFINE_bool('load_all_imgs_to_memory', False,
-                   'Load all training images to memory before training.')
-
 gflags.DEFINE_string('load', None,
                      'load model.')
 
@@ -154,26 +151,6 @@ class Model(ModelDesc):
   def _get_optimizer(self):
     lr = get_scalar_var('learning_rate', 0.1, summary=True)
     return tf.train.MomentumOptimizer(lr, 0.9, use_nesterov=True)
-
-
-def get_data(train_or_test, batch):
-  """
-  Args:
-    train_or_test: should be one of {'train', 'test', 'val'}
-  """
-  isTrain = train_or_test == 'train'
-
-  ds = Cdiscount(FLAGS.datadir, FLAGS.img_list_file, train_or_test,
-                 shuffle=isTrain, large_mem_sys=FLAGS.load_all_imgs_to_memory)
-  if FLAGS.apply_augmentation:
-    logger.info("Applying image augmentation.")
-    augmentors = fbresnet_augmentor(isTrain)
-    ds = AugmentImageComponent(ds, augmentors, copy=False)
-
-  if isTrain:
-      ds = PrefetchDataZMQ(ds, min(20, multiprocessing.cpu_count()))
-  ds = BatchData(ds, batch, remainder=not isTrain)
-  return ds
 
 
 def get_config(model, model_name):
