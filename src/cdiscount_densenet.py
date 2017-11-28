@@ -77,7 +77,7 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 # BATCH_SIZE = 64
 if socket.gethostname() == "ESC8000":
   BATCH_SIZE={
-    'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : 384, #1792
+    'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : 362, #1792
   }
   PRED_BATCH_SIZE=300
 else:
@@ -159,7 +159,8 @@ def get_config(model, model_name):
   else:
     # multi-GPU inference (with mandatory queue prefetch)
     callbacks.append(DataParallelInferenceRunner(
-        dataset_val, infs, list(range(nr_tower))))
+        dataset_val, infs, [int(x) for x in
+           os.environ['CUDA_VISIBLE_DEVICES'].split(",")]))
 
   return TrainConfig(
     dataflow=dataset_train,
