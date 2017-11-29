@@ -338,7 +338,7 @@ def inceptionResNetCv2(l, scope_name="inceptionResNetCv2"):
     l = tf.concat([
         Conv2D('convbranch0', l, 192, 1),
         proj_33(l, 192, 224, 256)], 3, name='concat')
-    l = Conv2D('conv1', l, 2048, 1, use_bias=True, nl=tf.identity)
+    l = Conv2D('conv1', l, 2144, 1, use_bias=True, nl=tf.identity)
     l = shortcut + l
     l = BNReLU('batch', l)
   return l

@@ -75,6 +75,15 @@ LEARNING_RATE={
   'cdiscount-inceptionv3' : [(5, 0.01), (9, 0.08), (12, 0.006),
 														 (17, 0.003), (22, 1e-3), (36, 2e-4),
 														 (41, 8e-5), (48, 1e-5), (53, 2e-6)],
+  'cdiscount-inceptionv4' : [(5, 0.01), (9, 0.08), (12, 0.006),
+														 (17, 0.003), (22, 1e-3), (36, 2e-4),
+														 (41, 8e-5), (48, 1e-5), (53, 2e-6)],
+  'cdiscount-inceptionresnetv1' : [(5, 0.01), (9, 0.08), (12, 0.006),
+														 (17, 0.003), (22, 1e-3), (36, 2e-4),
+														 (41, 8e-5), (48, 1e-5), (53, 2e-6)],
+  'cdiscount-inceptionresnetv2' : [(5, 0.01), (9, 0.08), (12, 0.006),
+														 (17, 0.003), (22, 1e-3), (36, 2e-4),
+														 (41, 8e-5), (48, 1e-5), (53, 2e-6)],
 }
 
 
@@ -109,7 +118,6 @@ class Model(ModelDesc):
       logits = inception(image)
       loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=label)
       loss = tf.reduce_mean(loss, name='loss')
-
 
     wrong = prediction_incorrect(logits, label, 1, name='wrong-top1')
     add_moving_summary(tf.reduce_mean(wrong, name='train-error-top1'))
