@@ -139,6 +139,7 @@ class Model(ModelDesc):
 
   def _get_optimizer(self):
       lr = tf.get_variable('learning_rate', initializer=0.045, trainable=False)
+      tf.summary.scalar('learning_rate', lr)
       return tf.train.AdamOptimizer(lr, epsilon=1e-3)
 
 

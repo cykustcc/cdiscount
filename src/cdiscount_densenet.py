@@ -151,6 +151,7 @@ def get_config(model, model_name):
   else:
     learning_rate_schedule = [(30, 1e-2), (60, 1e-3), (85, 1e-4),
        (95, 1e-5), (105, 1e-6)]
+  logger.info("learning rate schedule: {}".format(learning_rate_schedule))
   callbacks=[
     ModelSaver(),
     ScheduledHyperParamSetter('learning_rate',
