@@ -38,10 +38,10 @@ from .common_utils import *
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_integer('densenet_depth', 121,
+gflags.DEFINE_integer('densenet_depth', 169,
                       'depth of densenet, should be one of [121, 169, 201, 264].')
 
-gflags.DEFINE_integer('densenet_growth_rate', 12,
+gflags.DEFINE_integer('densenet_growth_rate', 24,
                       'growth rate of densenet, should be one of [12, 24, 32, 40].')
 
 gflags.DEFINE_string('load', None,
@@ -77,12 +77,14 @@ gflags.DEFINE_string('log_dir_name_suffix', "",
 # BATCH_SIZE = 64
 if socket.gethostname() == "ESC8000":
   BATCH_SIZE={
-    'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : 362, #1792
+    'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : 128,
+    'cdiscount-densenet-d169-gr24-BCTrue-theta0.5' : 96
   }
   PRED_BATCH_SIZE=300
 else:
   BATCH_SIZE={
-    'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : 128, #1792
+    'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : 128,
+    'cdiscount-densenet-d169-gr24-BCTrue-theta0.5' : 96
   }
   PRED_BATCH_SIZE=300
 
@@ -97,6 +99,8 @@ DENSENET_CONFIG = {
 
 LEARNING_RATE={
   'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : [(30, 1e-2), (60, 1e-3), (85, 1e-4),
+      (95, 1e-5), (105, 1e-6)],
+  'cdiscount-densenet-d169-gr24-BCTrue-theta0.5' : [(30, 1e-2), (60, 1e-3), (85, 1e-4),
       (95, 1e-5), (105, 1e-6)]
 }
 
