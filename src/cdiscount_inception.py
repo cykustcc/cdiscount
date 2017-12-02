@@ -27,7 +27,7 @@ from .inception_utils import *
 FLAGS = gflags.FLAGS
 
 gflags.DEFINE_string('mode', 'v3',
-                     'should be one of v3, v4, resnetv1, resnetv2.')
+                     'should be one of v3, v4, resnetv1, resnetv2, x(ception).')
 
 gflags.DEFINE_string('load', None,
                      'load model.')
@@ -59,6 +59,7 @@ if socket.gethostname() == "ESC8000":
     'cdiscount-inceptionv4' : 142,
     'cdiscount-inceptionresnetv1' : 142,
     'cdiscount-inceptionresnetv2' : 142,
+    'cdiscount-inceptionx' : 142,
   }
   PRED_BATCH_SIZE = 300
 else: #home, 8GB gpu memory.
@@ -67,6 +68,7 @@ else: #home, 8GB gpu memory.
     'cdiscount-inceptionv4' : 128, #1792
     'cdiscount-inceptionresnetv1' : 128,
     'cdiscount-inceptionresnetv2' : 128,
+    'cdiscount-inceptionx' : 128,
   }
   PRED_BATCH_SIZE = 192
 INPUT_SHAPE = 180
@@ -79,11 +81,14 @@ LEARNING_RATE={
 														 (17, 0.003), (22, 1e-3), (36, 2e-4),
 														 (41, 8e-5), (48, 1e-5), (53, 2e-6)],
   'cdiscount-inceptionresnetv1' : [(5, 0.01), (9, 0.08), (12, 0.006),
-														 (17, 0.003), (22, 1e-3), (36, 2e-4),
-														 (41, 8e-5), (48, 1e-5), (53, 2e-6)],
+														       (17, 0.003), (22, 1e-3), (36, 2e-4),
+														       (41, 8e-5), (48, 1e-5), (53, 2e-6)],
   'cdiscount-inceptionresnetv2' : [(5, 0.01), (9, 0.08), (12, 0.006),
-														 (17, 0.003), (22, 1e-3), (36, 2e-4),
-														 (41, 8e-5), (48, 1e-5), (53, 2e-6)],
+														       (17, 0.003), (22, 1e-3), (36, 2e-4),
+														       (41, 8e-5), (48, 1e-5), (53, 2e-6)],
+  'cdiscount-inceptionx' : [(5, 0.01), (9, 0.08), (12, 0.006),
+														(17, 0.003), (22, 1e-3), (36, 2e-4),
+														(41, 8e-5), (48, 1e-5), (53, 2e-6)],
 }
 
 
@@ -104,6 +109,7 @@ class Model(ModelDesc):
       'v4': inceptionv4,
       'resnetv1': inceptionResNetv1,
       'resnetv2': inceptionResNetv2,
+      'x': xception,
     }
 
     inception = INCEPTION_MODES[self.mode]

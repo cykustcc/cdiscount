@@ -2,8 +2,11 @@
 # -*- coding: utf-8 -*-
 # File: inception_utils.py
 # Author: Yukun Chen <cykustc@gmail.com>
+import tensorflow as tf
 
 from tensorpack import *
+from tensorpack.models.common import layer_register, VariableHolder, rename_get_variable
+from tensorpack.utils.argtools import shape2d, shape4d
 
 from .cdiscount_resnet_utils import resnet_shortcut, apply_preactivation
 
@@ -355,7 +358,7 @@ def reductionResNetBv2(l, scope_name="reductionResNetBv2"):
 
 def inceptionResNetv1(image):
   with argscope(Conv2D, nl=BNReLU, use_bias=False),\
-        argscope(BatchNorm, decay=0.9997, epsilon=1e-3):
+      argscope(BatchNorm, decay=0.9997, epsilon=1e-3):
     l = stemResNetv1(image)
     for i in xrange(5):
       l = inceptionResNetAv1(l, 'inceptionResNetAv1{}'.format(i))
@@ -372,7 +375,7 @@ def inceptionResNetv1(image):
 
 def inceptionResNetv2(image):
   with argscope(Conv2D, nl=BNReLU, use_bias=False),\
-        argscope(BatchNorm, decay=0.9997, epsilon=1e-3):
+      argscope(BatchNorm, decay=0.9997, epsilon=1e-3):
     l = stem(image)
     for i in xrange(4):
       l = inceptionResNetAv2(l, 'inceptionResNetAv2{}'.format(i))
@@ -386,4 +389,128 @@ def inceptionResNetv2(image):
     l = Dropout('drop', l, 0.8)
     logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
   return logits
+
+@layer_register(log_shape=True)
+def SeparableConv2D(x, out_channel, kernel_shape,
+                    padding='SAME', stride=(1, 1), depth_multiplier=1,
+                    dilation_rate=(1, 1), W_init=None, b_init=None,
+                    nl=tf.identity, use_bias=True,
+                    data_format='NHWC'):
+  """
+  2D convolution on 4D inputs.
+
+  Args:
+      x (tf.Tensor): a 4D tensor.
+          Must have known number of channels, but can have other unknown dimensions.
+      out_channel (int): number of output channel.
+      kernel_shape: (h, w) tuple or a int.
+      stride: (h, w) tuple or a int.
+      padding (str): 'valid' or 'same'. Case insensitive.
+      W_init: initializer for W. Defaults to `variance_scaling_initializer`.
+      b_init: initializer for b. Defaults to zero.
+      nl: a nonlinearity function.
+      use_bias (bool): whether to use bias.
+
+  Returns:
+      tf.Tensor named ``output`` with attribute `variables`.
+
+  Variable Names:
+
+  * ``W``: weights for depthwise convulution
+  * ``Wp``: weights for pointwise 1x1 convulution
+  * ``b``: bias
+  """
+  in_shape = x.get_shape().as_list()
+  channel_axis = 3 if data_format == 'NHWC' else 1
+  in_channel = in_shape[channel_axis]
+  assert in_channel is not None, "[Conv2D] Input cannot have unknown channel!"
+
+  kernel_shape = shape2d(kernel_shape)
+  padding = padding.upper()
+  filter_shape = kernel_shape + [in_channel, depth_multiplier]
+  filter_shape_p = shape2d(1) + [depth_multiplier * in_channel, out_channel]
+  stride = shape4d(stride, data_format=data_format)
+
+  if W_init is None:
+    W_init = tf.contrib.layers.variance_scaling_initializer()
+  if b_init is None:
+    b_init = tf.constant_initializer()
+
+  W = tf.get_variable('W', filter_shape, initializer=W_init)
+  Wp = tf.get_variable('Wp', filter_shape_p, initializer=W_init)
+  if use_bias:
+    b = tf.get_variable('b', [out_channel], initializer=b_init)
+
+  conv = tf.nn.separable_conv2d(x, W, Wp, stride, padding, rate=dilation_rate,
+                                data_format=data_format)
+
+  ret = nl(tf.nn.bias_add(conv, b, data_format=data_format) if use_bias else conv, name='output')
+  ret.variables = VariableHolder(W=W, Wp=Wp)
+  if use_bias:
+      ret.variables.b = b
+  return ret
+
+def xceptionResNetA(l, ch0, ch1, scope_name="xceptionResNetA", begin_w_relu=True):
+  with tf.variable_scope(scope_name):
+    shortcut = l
+    if begin_w_relu:
+      l = tf.nn.relu(l, name='relu0')
+    shortcut = Conv2D('conv0', shortcut, ch1, 1, use_bias=True, nl=tf.identity)
+    l = SeparableConv2D('sepconv0', l, ch0, 3)
+    l = tf.nn.relu(l, name='relu1')
+    l = SeparableConv2D('sepconv1', l, ch1, 3)
+    l = shortcut + l
+    l = BNReLU('batch', l)
+  return l
+
+def xceptionResNetB(l, ch, scope_name="xceptionResNetB"):
+  with tf.variable_scope(scope_name):
+    shortcut = l
+    l = tf.nn.relu(l, name='relu0')
+    l = SeparableConv2D('sepconv0', l, ch, 3)
+    l = tf.nn.relu(l, name='relu1')
+    l = SeparableConv2D('sepconv1', l, ch, 3)
+    l = tf.nn.relu(l, name='relu2')
+    l = SeparableConv2D('sepconv2', l, ch, 3)
+    l = shortcut + l
+    l = BNReLU('batch', l)
+  return l
+
+def entry_flow(image):
+  with tf.variable_scope("entry_flow"):
+    l = (LinearWrap(image)
+         .Conv2D('conv0', 32, 3, stride=2, padding='VALID')  # 299
+         .Conv2D('conv1', 64, 3, padding='VALID')())  # 149
+    l = xceptionResNetA(l, 128, 128, "xceptionResNetA0", begin_w_relu=False)
+    l = xceptionResNetA(l, 256, 256, "xceptionResNetA1", begin_w_relu=True)
+    l = xceptionResNetA(l, 728, 728, "xceptionResNetA2", begin_w_relu=True)
+  return l
+
+def middle_flow(l):
+  with tf.variable_scope("middle_flow"):
+    for i in xrange(8):
+      l = xceptionResNetB(l, 728, "xceptionResNetB{}".format(i))
+  return l
+
+def exit_flow(l):
+  with tf.variable_scope("exit_flow"):
+    l = xceptionResNetA(l, 728, 1024, "xceptionResNetA0")
+    l = SeparableConv2D("sepconv0", l, 1536, 3)
+    l = tf.nn.relu(l, name='relu0')
+    l = SeparableConv2D("sepconv1", l, 2048, 3)
+    l = tf.nn.relu(l, name='relu1')
+    l = GlobalAvgPooling('gap', l)
+    l = FullyConnected('fc0', l, 4096, nl=tf.identity)
+    l = FullyConnected('fc1', l, 4096, nl=tf.identity)
+  return l
+
+def xception(image):
+  with argscope(Conv2D, nl=BNReLU, use_bias=False),\
+      argscope(BatchNorm, decay=0.9997, epsilon=1e-3):
+    l = entry_flow(image)
+    l = middle_flow(l)
+    l = exit_flow(l)
+    l = Dropout('drop', l, 0.8)
+    logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
+  return l
 

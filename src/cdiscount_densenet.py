@@ -145,7 +145,8 @@ def get_config(model, model_name):
   dataset_val = get_data('val', batch)
   infs = [ClassificationError('wrong-top1', 'val-error-top1'),
           ClassificationError('wrong-top5', 'val-error-top5')]
-  steps_per_epoch = dataset_train.size() // 3
+  #steps_per_epoch = dataset_train.size() // 3
+  steps_per_epoch = 10000
   if model_name in LEARNING_RATE.keys():
     learning_rate_schedule = LEARNING_RATE[model_name]
   else:
