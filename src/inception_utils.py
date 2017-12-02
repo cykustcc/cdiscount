@@ -455,7 +455,7 @@ def xceptionResNetA(l, ch0, ch1, scope_name="xceptionResNetA", begin_w_relu=True
     shortcut = l
     if begin_w_relu:
       l = tf.nn.relu(l, name='relu0')
-    shortcut = Conv2D('conv0', shortcut, ch1, 1, use_bias=True, nl=tf.identity)
+    shortcut = Conv2D('conv0', shortcut, ch1, 1, use_bias=False, nl=BNReLU)
     l = SeparableConv2D('sepconv0', l, ch0, 3)
     l = tf.nn.relu(l, name='relu1')
     l = SeparableConv2D('sepconv1', l, ch1, 3)
