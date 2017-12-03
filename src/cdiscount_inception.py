@@ -59,7 +59,7 @@ if socket.gethostname() == "ESC8000":
     'cdiscount-inceptionv4' : 142,
     'cdiscount-inceptionresnetv1' : 142,
     'cdiscount-inceptionresnetv2' : 142,
-    'cdiscount-inceptionx' : 142,
+    'cdiscount-inceptionx' : 80,
   }
   PRED_BATCH_SIZE = 300
 else: #home, 8GB gpu memory.
@@ -68,7 +68,7 @@ else: #home, 8GB gpu memory.
     'cdiscount-inceptionv4' : 128, #1792
     'cdiscount-inceptionresnetv1' : 128,
     'cdiscount-inceptionresnetv2' : 128,
-    'cdiscount-inceptionx' : 128,
+    'cdiscount-inceptionx' : 64,
   }
   PRED_BATCH_SIZE = 192
 INPUT_SHAPE = 180

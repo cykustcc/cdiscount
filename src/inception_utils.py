@@ -220,6 +220,7 @@ def inceptionv3(image):
       shape = br1.get_shape().as_list()
       br1 = Conv2D('convout', br1, 768, shape[1:3], padding='VALID')
       br1 = FullyConnected('fc', br1, 5270, nl=tf.identity)
+      br1 = tf.nn.softmax(br1, name='output-prob-br1')
 
     with tf.variable_scope('incep-17-1280a'):
       l = tf.concat([
@@ -251,6 +252,7 @@ def inceptionv3(image):
     # 1x1x2048
     l = Dropout('drop', l, 0.8)
     logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
+    logits = tf.nn.softmax(logits, name='output-prob')
   return logits, br1
 
 def inceptionv4(image):
@@ -266,6 +268,7 @@ def inceptionv4(image):
   l = GlobalAvgPooling('gap', l)
   l = Dropout('drop', l, 0.8)
   logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
+  logits = tf.nn.softmax(logits, name='output-prob')
   return logits
 
 def inceptionResNetAv1(l, scope_name="inceptionResNetAv1"):
@@ -371,6 +374,7 @@ def inceptionResNetv1(image):
     l = GlobalAvgPooling('gap', l)
     l = Dropout('drop', l, 0.8)
     logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
+    logits = tf.nn.softmax(logits, name='output-prob')
   return logits
 
 def inceptionResNetv2(image):
@@ -388,6 +392,7 @@ def inceptionResNetv2(image):
     l = GlobalAvgPooling('gap', l)
     l = Dropout('drop', l, 0.8)
     logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
+    logits = tf.nn.softmax(logits, name='output-prob')
   return logits
 
 @layer_register(log_shape=True)
@@ -455,32 +460,38 @@ def xceptionResNetA(l, ch0, ch1, scope_name="xceptionResNetA", begin_w_relu=True
     shortcut = l
     if begin_w_relu:
       l = tf.nn.relu(l, name='relu0')
-    shortcut = Conv2D('conv0', shortcut, ch1, 1, use_bias=False, nl=BNReLU)
+    shortcut = Conv2D('conv0', shortcut, ch1, 1, stride=2, use_bias=False)
+    shortcut = BatchNorm('bnshortcut', shortcut)
     l = SeparableConv2D('sepconv0', l, ch0, 3)
+    l = BatchNorm('bn0', l)
     l = tf.nn.relu(l, name='relu1')
     l = SeparableConv2D('sepconv1', l, ch1, 3)
+    l = BatchNorm('bn1', l)
+    l = MaxPooling('maxpool', l, 3, 2, padding='SAME')
     l = shortcut + l
-    l = BNReLU('batch', l)
   return l
 
 def xceptionResNetB(l, ch, scope_name="xceptionResNetB"):
   with tf.variable_scope(scope_name):
     shortcut = l
+    shortcut = BatchNorm('bnshortcut', shortcut)
     l = tf.nn.relu(l, name='relu0')
     l = SeparableConv2D('sepconv0', l, ch, 3)
+    l = BatchNorm('bn0', l)
     l = tf.nn.relu(l, name='relu1')
     l = SeparableConv2D('sepconv1', l, ch, 3)
+    l = BatchNorm('bn1', l)
     l = tf.nn.relu(l, name='relu2')
     l = SeparableConv2D('sepconv2', l, ch, 3)
+    l = BatchNorm('bn2', l)
     l = shortcut + l
-    l = BNReLU('batch', l)
   return l
 
 def entry_flow(image):
   with tf.variable_scope("entry_flow"):
     l = (LinearWrap(image)
-         .Conv2D('conv0', 32, 3, stride=2, padding='VALID')  # 299
-         .Conv2D('conv1', 64, 3, padding='VALID')())  # 149
+         .Conv2D('conv0', 32, 3, stride=2, padding='SAME')  # 299
+         .Conv2D('conv1', 64, 3, padding='SAME')())  # 149
     l = xceptionResNetA(l, 128, 128, "xceptionResNetA0", begin_w_relu=False)
     l = xceptionResNetA(l, 256, 256, "xceptionResNetA1", begin_w_relu=True)
     l = xceptionResNetA(l, 728, 728, "xceptionResNetA2", begin_w_relu=True)
@@ -500,8 +511,8 @@ def exit_flow(l):
     l = SeparableConv2D("sepconv1", l, 2048, 3)
     l = tf.nn.relu(l, name='relu1')
     l = GlobalAvgPooling('gap', l)
-    l = FullyConnected('fc0', l, 4096, nl=tf.identity)
-    l = FullyConnected('fc1', l, 4096, nl=tf.identity)
+    #l = FullyConnected('fc0', l, 4096, nl=tf.identity)
+    #l = FullyConnected('fc1', l, 4096, nl=tf.identity)
   return l
 
 def xception(image):
@@ -512,5 +523,6 @@ def xception(image):
     l = exit_flow(l)
     l = Dropout('drop', l, 0.8)
     logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
-  return l
+    logits = tf.nn.softmax(logits, name='output-prob')
+  return logits
 
