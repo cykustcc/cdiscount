@@ -109,7 +109,8 @@ def image_preprocess(image, bgr=True):
     return image
 
 
-def compute_loss_and_error(logits, label):
+def compute_loss_and_error(logits, label, scope_name=""):
+  with tf.variable_scope(scope_name):
     prob = tf.nn.softmax(logits, name='output-prob')
 
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=label)

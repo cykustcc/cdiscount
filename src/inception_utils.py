@@ -220,7 +220,7 @@ def inceptionv3(image):
       shape = br1.get_shape().as_list()
       br1 = Conv2D('convout', br1, 768, shape[1:3], padding='VALID')
       br1 = FullyConnected('fc', br1, 5270, nl=tf.identity)
-      br1 = tf.nn.softmax(br1, name='output-prob-br1')
+      #br1 = tf.nn.softmax(br1, name='output-prob-br1')
 
     with tf.variable_scope('incep-17-1280a'):
       l = tf.concat([
@@ -252,7 +252,7 @@ def inceptionv3(image):
     # 1x1x2048
     l = Dropout('drop', l, 0.8)
     logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
-    logits = tf.nn.softmax(logits, name='output-prob')
+    #logits = tf.nn.softmax(logits, name='output-prob')
   return logits, br1
 
 def inceptionv4(image):
@@ -268,7 +268,7 @@ def inceptionv4(image):
   l = GlobalAvgPooling('gap', l)
   l = Dropout('drop', l, 0.8)
   logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
-  logits = tf.nn.softmax(logits, name='output-prob')
+  #logits = tf.nn.softmax(logits, name='output-prob')
   return logits
 
 def inceptionResNetAv1(l, scope_name="inceptionResNetAv1"):
@@ -374,7 +374,7 @@ def inceptionResNetv1(image):
     l = GlobalAvgPooling('gap', l)
     l = Dropout('drop', l, 0.8)
     logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
-    logits = tf.nn.softmax(logits, name='output-prob')
+    #logits = tf.nn.softmax(logits, name='output-prob')
   return logits
 
 def inceptionResNetv2(image):
@@ -392,7 +392,7 @@ def inceptionResNetv2(image):
     l = GlobalAvgPooling('gap', l)
     l = Dropout('drop', l, 0.8)
     logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
-    logits = tf.nn.softmax(logits, name='output-prob')
+    #logits = tf.nn.softmax(logits, name='output-prob')
   return logits
 
 @layer_register(log_shape=True)
@@ -523,6 +523,6 @@ def xception(image):
     l = exit_flow(l)
     l = Dropout('drop', l, 0.8)
     logits = FullyConnected('linear', l, out_dim=5270, nl=tf.identity)
-    logits = tf.nn.softmax(logits, name='output-prob')
+    #logits = tf.nn.softmax(logits, name='output-prob')
   return logits
 

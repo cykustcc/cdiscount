@@ -100,8 +100,8 @@ DENSENET_CONFIG = {
 LEARNING_RATE={
   'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : [(30, 1e-2), (60, 1e-3), (85, 1e-4),
       (95, 1e-5), (105, 1e-6)],
-  'cdiscount-densenet-d169-gr24-BCTrue-theta0.5' : [(30, 1e-2), (60, 1e-3), (85, 1e-4),
-      (95, 1e-5), (105, 1e-6)]
+  'cdiscount-densenet-d169-gr24-BCTrue-theta0.5' : [(15, 1e-2), (30, 1e-3), (40, 1e-4),
+      (55, 1e-5), (75, 1e-6)]
 }
 
 class Model(ModelDesc):

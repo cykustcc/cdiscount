@@ -116,20 +116,11 @@ class Model(ModelDesc):
 
     if self.mode == 'v3':
       logits, br1 = inception(image)
-      loss1 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=br1, labels=label)
-      loss1 = tf.reduce_mean(loss1, name='loss1')
-      loss2 = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=label)
-      loss2 = tf.reduce_mean(loss2, name='loss2')
+      loss1 = compute_loss_and_error(br1, label)
+      loss2 = compute_loss_and_error(br2, label)
     else:
       logits = inception(image)
-      loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=label)
-      loss = tf.reduce_mean(loss, name='loss')
-
-    wrong = prediction_incorrect(logits, label, 1, name='wrong-top1')
-    add_moving_summary(tf.reduce_mean(wrong, name='train-error-top1'))
-
-    wrong = prediction_incorrect(logits, label, 5, name='wrong-top5')
-    add_moving_summary(tf.reduce_mean(wrong, name='train-error-top5'))
+      loss = compute_loss_and_error(logits, label)
 
     # weight decay on all W of fc layers
     wd_w = tf.train.exponential_decay(0.00004, get_global_step_var(),
