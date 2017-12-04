@@ -117,7 +117,7 @@ class Model(ModelDesc):
     if self.mode == 'v3':
       logits, br1 = inception(image)
       loss1 = compute_loss_and_error(br1, label)
-      loss2 = compute_loss_and_error(br2, label)
+      loss2 = compute_loss_and_error(logits, label)
     else:
       logits = inception(image)
       loss = compute_loss_and_error(logits, label)
