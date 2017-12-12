@@ -100,8 +100,8 @@ DENSENET_CONFIG = {
 LEARNING_RATE={
   'cdiscount-densenet-d121-gr12-BCTrue-theta0.5' : [(30, 1e-2), (60, 1e-3), (85, 1e-4),
       (95, 1e-5), (105, 1e-6)],
-  'cdiscount-densenet-d169-gr24-BCTrue-theta0.5' : [(15, 1e-2), (30, 1e-3), (40, 1e-4),
-      (55, 1e-5), (75, 1e-6)]
+  'cdiscount-densenet-d169-gr24-BCTrue-theta0.5' : [(15, 1e-2), (25, 1e-3), (32, 1e-4),
+      (40, 1e-5), (48, 1e-6)]
 }
 
 class Model(ModelDesc):
@@ -146,7 +146,7 @@ def get_config(model, model_name):
   infs = [ClassificationError('wrong-top1', 'val-error-top1'),
           ClassificationError('wrong-top5', 'val-error-top5')]
   #steps_per_epoch = dataset_train.size() // 3
-  steps_per_epoch = 10000
+  steps_per_epoch = 5000
   if model_name in LEARNING_RATE.keys():
     learning_rate_schedule = LEARNING_RATE[model_name]
   else:
